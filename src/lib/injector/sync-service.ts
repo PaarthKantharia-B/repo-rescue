@@ -538,9 +538,10 @@ export async function processLivePREvent(
   );
 
   // 3. User Resolution in PostgreSQL
+  const prAuthorLogin = pr.user?.login || (pr as any).user_login || 'ghost';
   const prUser = await withPrismaRetry(() =>
     prisma.user.findFirst({
-      where: { githubUsername: { mode: 'insensitive', equals: pr.user.login } },
+      where: { githubUsername: { mode: 'insensitive', equals: prAuthorLogin } },
     })
   );
   const userId = prUser ? prUser.id : await getGhostUserId();

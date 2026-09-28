@@ -49,13 +49,22 @@ export interface VerificationResult {
  */
 export function extractLinkedIssueNumbers(title: string, body = ''): number[] {
   const combined = `${title} ${body}`;
-  const regex = /(?:fixes|fixed|fix|closes|closed|close|resolves|resolved|resolve)\s+#(\d+)/gi;
+  const regex = /(?:fixes|fixed|fix|closes|closed|close|resolves|resolved|resolve|solves|solved|solve|refs|ref)\s+#(\d+)/gi;
   const matches = new Set<number>();
   let match;
 
   while ((match = regex.exec(combined)) !== null) {
     if (match[1]) {
       matches.add(parseInt(match[1], 10));
+    }
+  }
+
+  if (matches.size === 0) {
+    const fallbackRegex = /#(\d+)/g;
+    while ((match = fallbackRegex.exec(combined)) !== null) {
+      if (match[1]) {
+        matches.add(parseInt(match[1], 10));
+      }
     }
   }
 
