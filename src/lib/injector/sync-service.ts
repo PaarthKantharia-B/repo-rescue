@@ -497,7 +497,7 @@ export async function processLivePREvent(
 ): Promise<VerificationResult & { syncStatus?: string }> {
   const action = payload.action;
   const pr = payload.pull_request;
-  const repoFullName = pr.base.repo.full_name;
+  const repoFullName = pr.base?.repo?.full_name || (pr as any).repository?.full_name || (payload as any).repository?.full_name;
   const now = new Date();
 
   // 1. Delivery Idempotency Check in PostgreSQL
@@ -514,7 +514,8 @@ export async function processLivePREvent(
   }
 
   // 2. Validate Repository and Organization in PostgreSQL
-  const validation = await validateEventRepository(repoFullName, pr.base.repo.id);
+  const repoGithubId = pr.base?.repo?.id || (pr as any).repository?.id || (payload as any).repository?.id;
+  const validation = await validateEventRepository(repoFullName, repoGithubId);
   if (!validation.isValid || !validation.repo) {
     return {
       status: 'REJECTED',
@@ -545,8 +546,15 @@ export async function processLivePREvent(
   const userId = prUser ? prUser.id : await getGhostUserId();
 
   // 4. Upsert PullRequest in PostgreSQL
-  const prStatus: PRStatus = pr.merged ? 'MERGED' : action === 'closed' ? 'CLOSED' : 'OPEN';
-  const githubState = pr.merged ? 'closed' : action === 'closed' ? 'closed' : 'open';
+  const isMerged = Boolean(pr.merged || pr.merged_at || (pr as any).pull_request?.merged_at);
+  const mergedAtDate = pr.merged_at
+    ? new Date(pr.merged_at)
+    : (pr as any).pull_request?.merged_at
+      ? new Date((pr as any).pull_request.merged_at)
+      : null;
+
+  const prStatus: PRStatus = isMerged ? 'MERGED' : action === 'closed' ? 'CLOSED' : 'OPEN';
+  const githubState = isMerged ? 'closed' : action === 'closed' ? 'closed' : 'open';
 
   const upsertedPR = await withPrismaRetry(() =>
     prisma.pullRequest.upsert({
@@ -562,23 +570,23 @@ export async function processLivePREvent(
         url: `https://github.com/${repo.fullName}/pull/${pr.number}`,
         status: prStatus,
         githubState,
-        isMerged: Boolean(pr.merged),
+        isMerged,
         openedAt: now,
         latestActivityAt: now,
         lastSyncedAt: now,
         closedAt: action === 'closed' ? now : null,
-        mergedAt: pr.merged_at ? new Date(pr.merged_at) : null,
+        mergedAt: mergedAtDate,
         mergedBy: pr.merged_by?.login || null,
       },
       update: {
         title: pr.title,
         status: prStatus,
         githubState,
-        isMerged: Boolean(pr.merged),
+        isMerged,
         latestActivityAt: now,
         lastSyncedAt: now,
         closedAt: action === 'closed' ? now : undefined,
-        mergedAt: pr.merged_at ? new Date(pr.merged_at) : undefined,
+        mergedAt: mergedAtDate || undefined,
         mergedBy: pr.merged_by?.login || undefined,
         ...(matchedIssue ? { issueId: matchedIssue.id } : {}),
       },
@@ -619,8 +627,18 @@ export async function processLivePREvent(
   );
 
   // 7. Delegate merged PRs to Phase 6 anti-cheating verification engine
-  if (action === 'closed' && pr.merged && pr.merged_at) {
-    const result = await verifyAndAwardContribution(payload);
+  if ((action === 'closed' || isMerged) && isMerged && mergedAtDate) {
+    const verificationPayload: GitHubPRPayload = {
+      action: 'closed',
+      number: pr.number,
+      pull_request: {
+        ...pr,
+        merged: true,
+        merged_at: mergedAtDate.toISOString(),
+        base: pr.base || { repo: { id: Number(repo.githubId), full_name: repo.fullName, name: repo.name, owner: { login: repo.owner } } },
+      },
+    };
+    const result = await verifyAndAwardContribution(verificationPayload);
     return { ...result, syncStatus: 'SUCCESS' };
   }
 

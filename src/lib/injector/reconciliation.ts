@@ -913,11 +913,36 @@ export async function reconcileRepositoryIncremental(
   }
 
   for (const ghPR of githubPRs) {
-    const action = ghPR.state === 'closed' ? 'closed' : 'opened';
+    let fullPRData: any = null;
+    try {
+      const prRes = await client.fetchPage<any>(`https://api.github.com/repos/${repo.fullName}/pulls/${ghPR.number}`);
+      if (!prRes.notModified && prRes.data) {
+        fullPRData = prRes.data;
+      }
+    } catch (err) {
+      console.warn(`[Reconciliation PR Fetch Warning] Failed fetching full PR #${ghPR.number} for '${repo.fullName}':`, err);
+    }
+
+    const prPayload = fullPRData || {
+      ...ghPR,
+      base: {
+        repo: {
+          id: Number(repo.githubId),
+          name: repo.name,
+          full_name: repo.fullName,
+          owner: { login: repo.owner },
+        },
+      },
+      merged: Boolean((ghPR as any).merged || (ghPR as any).pull_request?.merged_at || (ghPR as any).merged_at),
+      merged_at: (ghPR as any).merged_at || (ghPR as any).pull_request?.merged_at || null,
+      merged_by: (ghPR as any).merged_by || null,
+    };
+
+    const action = prPayload.merged ? 'closed' : ghPR.state === 'closed' ? 'closed' : 'opened';
     const result = await processLivePREvent({
       action,
       number: ghPR.number,
-      pull_request: ghPR,
+      pull_request: prPayload,
     } as any);
 
     if (result.syncStatus !== 'SUCCESS') processorErrors.push(result.reason);
