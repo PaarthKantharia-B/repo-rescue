@@ -1,0 +1,362 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  CONTRIBUTOR
+  MAINTAINER
+  ADMIN
+}
+
+enum IssueStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum PRStatus {
+  OPEN
+  MERGED
+  CLOSED
+}
+
+enum ContributionStatus {
+  CLAIMED
+  IN_REVIEW
+  MERGED_AND_AUDITED
+  REJECTED
+}
+
+enum LedgerTransactionType {
+  ISSUE_SOLVED
+  BONUS
+  PENALTY
+  ADJUSTMENT
+}
+
+model User {
+  id             String         @id @default(cuid())
+  name           String?
+  email          String?        @unique
+  emailVerified  DateTime?
+  image          String?
+  githubUsername String?        @unique
+  bio            String?
+  location       String?
+  company        String?
+  websiteUrl     String?
+  role           Role           @default(CONTRIBUTOR)
+  
+  totalPoints    Float          @default(0.0)
+  rrRating       Int            @default(1200)
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  accounts       Account[]
+  sessions       Session[]
+  contributions  Contribution[]
+  ledgerEntries  PointsLedger[]
+  pullRequests   PullRequest[]
+
+  @@index([totalPoints(sort: Desc)])
+  @@index([githubUsername])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Organization {
+  id                    String       @id @default(cuid())
+  githubId              BigInt       @unique
+  login                 String       @unique // e.g. "supabase", "grafana", "cloudflare"
+  name                  String?
+  description           String?      @db.Text
+  avatarUrl             String?
+  htmlUrl               String
+  
+  // Organization Sync Capability Toggles
+  autoDiscoverRepos     Boolean      @default(true)
+  syncIssues            Boolean      @default(true)
+  syncComments          Boolean      @default(true)
+  syncLabels            Boolean      @default(true)
+  syncPrActivity        Boolean      @default(true)
+  reconciliationEnabled Boolean      @default(true)
+  
+  lastDiscoveredAt      DateTime?
+  lastSyncedAt          DateTime?
+
+  repositories          Repository[]
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  @@index([login])
+}
+
+model Repository {
+  id                      String        @id @default(cuid())
+  githubId                BigInt        @unique
+  name                    String
+  fullName                String        @unique // e.g. "supabase/supabase"
+  owner                   String
+  description             String?       @db.Text
+  url                     String
+  language                String?
+  starsCount              Int           @default(0)
+  forksCount              Int           @default(0)
+  openIssuesCount         Int           @default(0)
+  isPrivate               Boolean       @default(false)
+  isArchived              Boolean       @default(false)
+  isFork                  Boolean       @default(false)
+  hasIssues               Boolean       @default(true)
+  eligibilityStatus       String        @default("ELIGIBLE") // "ELIGIBLE", "INELIGIBLE_FORK", "INELIGIBLE_ARCHIVED", "INELIGIBLE_NO_ISSUES"
+  eligibilityReason       String?
+  ecosystem               String?       // e.g. "Node.js", "Python", "Rust", "Go"
+  repoType                String        @default("OPEN_SOURCE") // "FRAMEWORK", "COMPILER", "TOOL", "INFRA", "APP"
+  maintainerActivityScore Float         @default(5.0) // 0.0 to 10.0 scale
+
+  organizationId          String?
+  organization            Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  lastSyncedAt            DateTime?
+  lastAttemptedSyncAt     DateTime?
+  syncStatus              String?       @default("IDLE") // "IDLE", "RUNNING", "FAILED", "SUCCESS"
+  syncError               String?       @db.Text
+  failureCount            Int           @default(0)
+
+  issues                  Issue[]
+  pullRequests            PullRequest[]
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+
+  @@index([language])
+  @@index([ecosystem])
+  @@index([repoType])
+  @@index([maintainerActivityScore])
+  @@index([organizationId])
+  @@index([eligibilityStatus])
+}
+
+model Issue {
+  id                    String       @id @default(cuid())
+  githubId              BigInt       @unique
+  githubNumber          Int
+  repositoryId          String
+  repository            Repository   @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  title                 String
+  body                  String?      @db.Text
+  url                   String
+  status                IssueStatus  @default(OPEN)
+  labels                String[]     @default([])
+  assignees             String[]     @default([])
+  assigneeCount         Int          @default(0)
+  language              String?
+  ecosystem             String?
+  authorUsername        String?
+
+  // Composite RR Difficulty Score (0.0 - 10.0)
+  rrDifficulty          Float        @default(0.0)
+
+  // Synchronization & PR Activity Tracking
+  githubState           String?      @default("open")
+  githubStateUpdatedAt  DateTime?
+  lastSyncedAt          DateTime?
+  openPrCount           Int          @default(0)
+  mergedPrCount         Int          @default(0)
+  latestPrActivityAt    DateTime?
+
+  commentsCount         Int          @default(0)
+  milestone             String?
+  closedAt              DateTime?
+
+  scores                IssueScore?
+  contributions         Contribution[]
+  pullRequests          PullRequest[]
+
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  @@unique([repositoryId, githubNumber])
+  @@index([rrDifficulty])
+  @@index([assigneeCount])
+  @@index([language])
+  @@index([ecosystem])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([repositoryId, status])
+}
+
+model IssueScore {
+  id                   String   @id @default(cuid())
+  issueId              String   @unique
+  issue                Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  // Versioning and Auditability
+  scoringVersion       String   @default("v1.0.0")
+  calculatedAt         DateTime @default(now())
+
+  // 8 Individual Difficulty Factors (0.0 to 10.0 each)
+  technicalDifficulty  Float
+  codebaseComplexity   Float
+  issueScope           Float
+  domainKnowledge      Float
+  expectedImpact       Float
+  testingComplexity    Float
+  issueClarity         Float
+  maintainerActivity   Float
+
+  // Composite score matching issue.rrDifficulty
+  compositeScore       Float
+  reasoning            String?  @db.Text
+
+  @@index([scoringVersion])
+  @@index([compositeScore])
+  @@index([expectedImpact])
+}
+
+model PullRequest {
+  id                String      @id @default(cuid())
+  githubId          BigInt      @unique
+  githubNumber      Int
+  repositoryId      String
+  repository        Repository  @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  title             String
+  url               String
+  status            PRStatus    @default(OPEN)
+  githubState       String?     @default("open")
+  isMerged          Boolean     @default(false)
+  openedAt          DateTime?
+  closedAt          DateTime?
+  mergedAt          DateTime?
+  mergedBy          String?     // GitHub username of maintainer who merged
+  lastSyncedAt      DateTime?
+  latestActivityAt  DateTime?
+
+  userId            String
+  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  issueId           String?
+  issue             Issue?      @relation(fields: [issueId], references: [id], onDelete: SetNull)
+
+  contribution      Contribution?
+
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@index([status])
+  @@index([userId])
+  @@index([repositoryId])
+}
+
+model Contribution {
+  id            String             @id @default(cuid())
+  userId        String
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  issueId       String
+  issue         Issue              @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  pullRequestId String?            @unique
+  pullRequest   PullRequest?       @relation(fields: [pullRequestId], references: [id], onDelete: SetNull)
+
+  status        ContributionStatus @default(CLAIMED)
+  
+  rrPoints      Float
+  verifiedAt    DateTime           @default(now())
+
+  ledgerEntry   PointsLedger?
+
+  @@unique([userId, issueId])
+  @@index([userId])
+  @@index([issueId])
+  @@index([status])
+}
+
+model PointsLedger {
+  id              String                @id @default(cuid())
+  userId          String
+  user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type            LedgerTransactionType @default(ISSUE_SOLVED)
+  amount          Float
+  balanceAfter    Float
+  reason          String
+
+  contributionId  String?               @unique
+  contribution    Contribution?         @relation(fields: [contributionId], references: [id], onDelete: SetNull)
+
+  createdAt       DateTime              @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model SyncAuditLog {
+  id              String   @id @default(cuid())
+  organizationId  String?
+  repositoryId    String?
+  issueId         String?
+  eventType       String   // e.g. "ORG_DISCOVERED", "REPO_DISCOVERED", "BACKFILL_ISSUE", "WEBHOOK_ISSUE", "RECONCILIATION"
+  status          String   // e.g. "SUCCESS", "FAILED", "SKIPPED"
+  changesSummary  String?  @db.Text
+  gradingRan      Boolean  @default(false)
+  gradingScore    Float?
+  errorMessage    String?  @db.Text
+  createdAt       DateTime @default(now())
+
+  @@index([repositoryId])
+  @@index([issueId])
+  @@index([createdAt])
+}
+
+model WebhookDelivery {
+  id           String   @id @default(cuid())
+  deliveryId   String   @unique
+  eventType    String
+  action       String?
+  processedAt  DateTime @default(now())
+
+  @@index([deliveryId])
+}
+
+

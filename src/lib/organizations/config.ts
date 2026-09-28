@@ -1,0 +1,177 @@
+import { OrganizationConfig } from '@/types';
+
+/**
+ * Authoritative target organization registry for the Repo Rescue Issue Injector.
+ * Represents organization configuration metadata. No fake/synthetic issue or repository data is created.
+ */
+export const TARGET_ORGANIZATIONS_CONFIG: OrganizationConfig[] = [
+  {
+    githubId: 4639908,
+    login: 'supabase',
+    name: 'Supabase',
+    description: 'The open source Firebase alternative.',
+    avatarUrl: 'https://avatars.githubusercontent.com/u/54469796?v=4',
+    htmlUrl: 'https://github.com/supabase',
+    autoDiscoverRepos: true,
+    syncIssues: true,
+    syncComments: true,
+    syncLabels: true,
+    syncPrActivity: true,
+    reconciliationEnabled: true,
+  },
+  {
+    githubId: 7195757,
+    login: 'grafana',
+    name: 'Grafana Labs',
+    description: 'The open and composable observability and data visualization platform.',
+    avatarUrl: 'https://avatars.githubusercontent.com/u/7195757?v=4',
+    htmlUrl: 'https://github.com/grafana',
+    autoDiscoverRepos: true,
+    syncIssues: true,
+    syncComments: true,
+    syncLabels: true,
+    syncPrActivity: true,
+    reconciliationEnabled: true,
+  },
+  {
+    githubId: 314348,
+    login: 'cloudflare',
+    name: 'Cloudflare',
+    description: 'Open source tools, libraries, and SDKs from Cloudflare.',
+    avatarUrl: 'https://avatars.githubusercontent.com/u/314348?v=4',
+    htmlUrl: 'https://github.com/cloudflare',
+    autoDiscoverRepos: true,
+    syncIssues: true,
+    syncComments: true,
+    syncLabels: true,
+    syncPrActivity: true,
+    reconciliationEnabled: true,
+  },
+  {
+    githubId: 25029402,
+    login: 'appwrite',
+    name: 'Appwrite',
+    description: 'Build like a team of hundreds. Appwrite is an open-source backend-as-a-service platform.',
+    avatarUrl: 'https://avatars.githubusercontent.com/u/25029402?v=4',
+    htmlUrl: 'https://github.com/appwrite',
+    autoDiscoverRepos: true,
+    syncIssues: true,
+    syncComments: true,
+    syncLabels: true,
+    syncPrActivity: true,
+    reconciliationEnabled: true,
+  },
+  {
+    githubId: 14985020,
+    login: 'vercel',
+    name: 'Vercel',
+    description: 'Vercel develops Next.js, Turbo, and developer tools for the open web.',
+    avatarUrl: 'https://avatars.githubusercontent.com/u/14985020?v=4',
+    htmlUrl: 'https://github.com/vercel',
+    autoDiscoverRepos: true,
+    syncIssues: true,
+    syncComments: true,
+    syncLabels: true,
+    syncPrActivity: true,
+    reconciliationEnabled: true,
+  },
+  {
+    githubId: 56497140,
+    login: 'temporalio',
+    name: 'Temporal',
+    description: 'Temporal is an open-source workflow orchestration engine.',
+    avatarUrl: 'https://avatars.githubusercontent.com/u/56497140?v=4',
+    htmlUrl: 'https://github.com/temporalio',
+    autoDiscoverRepos: true,
+    syncIssues: true,
+    syncComments: true,
+    syncLabels: true,
+    syncPrActivity: true,
+    reconciliationEnabled: true,
+  },
+  {
+    githubId: 62232235,
+    login: 'PostHog',
+    name: 'PostHog',
+    description: 'Open-source product analytics, feature flags, session recording, and A/B testing.',
+    avatarUrl: 'https://avatars.githubusercontent.com/u/62232235?v=4',
+    htmlUrl: 'https://github.com/PostHog',
+    autoDiscoverRepos: true,
+    syncIssues: true,
+    syncComments: true,
+    syncLabels: true,
+    syncPrActivity: true,
+    reconciliationEnabled: true,
+  },
+  {
+    githubId: 45620959,
+    login: 'n8n-io',
+    name: 'n8n',
+    description: 'Free and source-available fair-code workflow automation tool.',
+    avatarUrl: 'https://avatars.githubusercontent.com/u/45620959?v=4',
+    htmlUrl: 'https://github.com/n8n-io',
+    autoDiscoverRepos: true,
+    syncIssues: true,
+    syncComments: true,
+    syncLabels: true,
+    syncPrActivity: true,
+    reconciliationEnabled: true,
+  },
+  {
+    githubId: 5231346,
+    login: 'directus',
+    name: 'Directus',
+    description: 'The Modern Data Platform. Directus turns any SQL database into a real-time GraphQL & REST API.',
+    avatarUrl: 'https://avatars.githubusercontent.com/u/5231346?v=4',
+    htmlUrl: 'https://github.com/directus',
+    autoDiscoverRepos: true,
+    syncIssues: true,
+    syncComments: true,
+    syncLabels: true,
+    syncPrActivity: true,
+    reconciliationEnabled: true,
+  },
+  {
+    githubId: 80168958,
+    login: 'calcom',
+    name: 'Cal.com',
+    description: 'The open-source scheduling infrastructure for everyone.',
+    avatarUrl: 'https://avatars.githubusercontent.com/u/80168958?v=4',
+    htmlUrl: 'https://github.com/calcom',
+    autoDiscoverRepos: true,
+    syncIssues: true,
+    syncComments: true,
+    syncLabels: true,
+    syncPrActivity: true,
+    reconciliationEnabled: true,
+  },
+  {
+    githubId: 334940138,
+    login: 'test-org-uno',
+    name: 'test-org-uno',
+    description: 'Test Organization Uno for Repo Rescue MVP lifecycle testing.',
+    avatarUrl: 'https://avatars.githubusercontent.com/u/334940138?v=4',
+    htmlUrl: 'https://github.com/test-org-uno',
+    autoDiscoverRepos: true,
+    syncIssues: true,
+    syncComments: true,
+    syncLabels: true,
+    syncPrActivity: true,
+    reconciliationEnabled: true,
+  },
+];
+
+/**
+ * Returns configuration for a target organization by login handle (case-insensitive).
+ */
+export function getOrganizationConfig(login: string): OrganizationConfig | undefined {
+  const norm = login.trim().toLowerCase();
+  return TARGET_ORGANIZATIONS_CONFIG.find((org) => org.login.toLowerCase() === norm);
+}
+
+/**
+ * Returns all configured target organization logins.
+ */
+export function getTargetOrganizationLogins(): string[] {
+  return TARGET_ORGANIZATIONS_CONFIG.map((org) => org.login);
+}

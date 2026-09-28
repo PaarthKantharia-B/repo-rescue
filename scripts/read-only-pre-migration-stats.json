@@ -1,0 +1,168 @@
+{
+  "totalCount": 14193,
+  "changedCount": 14106,
+  "v1": {
+    "min": 0.4,
+    "max": 8.1,
+    "mean": 6.170365673219127,
+    "median": 6.1,
+    "buckets1": {
+      "[0.0 - 1.0)": 100,
+      "[1.0 - 2.0)": 8,
+      "[2.0 - 3.0)": 121,
+      "[3.0 - 4.0)": 493,
+      "[4.0 - 5.0)": 115,
+      "[5.0 - 6.0)": 4365,
+      "[6.0 - 7.0)": 6698,
+      "[7.0 - 8.0)": 2287,
+      "[8.0 - 9.0)": 6,
+      "[9.0 - 10.0)": 0,
+      "[10.0 - 11.0)": 0
+    },
+    "buckets05": {
+      "[0.0 - 0.5)": 18,
+      "[0.5 - 1.0)": 82,
+      "[1.0 - 1.5)": 0,
+      "[1.5 - 2.0)": 8,
+      "[2.0 - 2.5)": 0,
+      "[2.5 - 3.0)": 121,
+      "[3.0 - 3.5)": 256,
+      "[3.5 - 4.0)": 237,
+      "[4.0 - 4.5)": 51,
+      "[4.5 - 5.0)": 64,
+      "[5.0 - 5.5)": 3,
+      "[5.5 - 6.0)": 4362,
+      "[6.0 - 6.5)": 3503,
+      "[6.5 - 7.0)": 3195,
+      "[7.0 - 7.5)": 1818,
+      "[7.5 - 8.0)": 469,
+      "[8.0 - 8.5)": 6,
+      "[8.5 - 9.0)": 0,
+      "[9.0 - 9.5)": 0,
+      "[9.5 - 10.0)": 0
+    }
+  },
+  "v2": {
+    "min": 0.4,
+    "max": 8.8,
+    "mean": 3.391432396251275,
+    "median": 3.1,
+    "buckets1": {
+      "[0.0 - 1.0)": 497,
+      "[1.0 - 2.0)": 666,
+      "[2.0 - 3.0)": 5105,
+      "[3.0 - 4.0)": 2794,
+      "[4.0 - 5.0)": 4413,
+      "[5.0 - 6.0)": 322,
+      "[6.0 - 7.0)": 20,
+      "[7.0 - 8.0)": 34,
+      "[8.0 - 9.0)": 342,
+      "[9.0 - 10.0)": 0,
+      "[10.0 - 11.0)": 0
+    },
+    "buckets05": {
+      "[0.0 - 0.5)": 19,
+      "[0.5 - 1.0)": 478,
+      "[1.0 - 1.5)": 478,
+      "[1.5 - 2.0)": 188,
+      "[2.0 - 2.5)": 17,
+      "[2.5 - 3.0)": 5088,
+      "[3.0 - 3.5)": 2308,
+      "[3.5 - 4.0)": 486,
+      "[4.0 - 4.5)": 3479,
+      "[4.5 - 5.0)": 934,
+      "[5.0 - 5.5)": 319,
+      "[5.5 - 6.0)": 3,
+      "[6.0 - 6.5)": 1,
+      "[6.5 - 7.0)": 19,
+      "[7.0 - 7.5)": 34,
+      "[7.5 - 8.0)": 0,
+      "[8.0 - 8.5)": 215,
+      "[8.5 - 9.0)": 127,
+      "[9.0 - 9.5)": 0,
+      "[9.5 - 10.0)": 0
+    }
+  },
+  "largestChanges": [
+    {
+      "issueId": "cmufi8tdk00wkbt886yqizhb2",
+      "repo": "supabase/supabase",
+      "title": "0006 multiple permissive policies - Increase clarity of example, correct final example code",
+      "v1": 0.5,
+      "v2": 8.6,
+      "diff": 8.1
+    },
+    {
+      "issueId": "cmufiihve02hbbt88a7tyrhpk",
+      "repo": "supabase/supabase-csharp",
+      "title": "parity(realtime): update httpSend() to new per-event URL format + binary payload support [from supabase-js]",
+      "v1": 0.5,
+      "v2": 8.2,
+      "diff": 7.699999999999999
+    },
+    {
+      "issueId": "cmuftbg6n037d2ton39ahnq0o",
+      "repo": "supabase/pg_graphql",
+      "title": "Documentation lists Aggregate, but feature not released in pg_graphql",
+      "v1": 7.6,
+      "v2": 0.4,
+      "diff": 7.199999999999999
+    },
+    {
+      "issueId": "cmugvoj7p0h83ap78q4gmtn4i",
+      "repo": "grafana/tempo",
+      "title": "Derived metrics are missing HELP documentation",
+      "v1": 7.4,
+      "v2": 0.4,
+      "diff": 7
+    },
+    {
+      "issueId": "cmugpeb9y03moazas1c1dhwxk",
+      "repo": "grafana/grafana",
+      "title": "Link to span in tracing table gets broken when using transformation",
+      "v1": 7.4,
+      "v2": 0.4,
+      "diff": 7
+    },
+    {
+      "issueId": "cmugw95q90mumap78u8s84vgy",
+      "repo": "grafana/pyroscope",
+      "title": "Docs epic: Update outdated Pyroscope documentation for V2-default architecture",
+      "v1": 7.4,
+      "v2": 0.5,
+      "diff": 6.9
+    },
+    {
+      "issueId": "cmugtp7gr05j1su0053981365",
+      "repo": "grafana/grafana",
+      "title": "Alerting: Webex notifier — add optional card payload mode (keep markdown default)",
+      "v1": 7.4,
+      "v2": 0.5,
+      "diff": 6.9
+    },
+    {
+      "issueId": "cmugtsgzr0731su00fa7ldion",
+      "repo": "grafana/grafana",
+      "title": "i18n: extraction errors don't fail the build — `failOnWarnings` had no successor after the i18next-cli migration",
+      "v1": 7.4,
+      "v2": 0.5,
+      "diff": 6.9
+    },
+    {
+      "issueId": "cmugw6asu0lg0ap784kx159f3",
+      "repo": "grafana/grafana-infinity-datasource",
+      "title": "Dependency Dashboard",
+      "v1": 8.1,
+      "v2": 1.2,
+      "diff": 6.8999999999999995
+    },
+    {
+      "issueId": "cmugxghl70qtbap78ls77l75m",
+      "repo": "grafana/grafana-iot-twinmaker-app",
+      "title": "Dependency Dashboard",
+      "v1": 8.1,
+      "v2": 1.2,
+      "diff": 6.8999999999999995
+    }
+  ]
+}
