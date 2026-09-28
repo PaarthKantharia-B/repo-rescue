@@ -623,19 +623,10 @@ export class ProductionSyncOrchestrator {
     const targetOrgs = TARGET_ORGANIZATIONS_CONFIG.map((o) => o.login);
     const reconciler = this.getReconciler(options);
 
-    // 1. Run ongoing repository discovery across 1 target organization per 15-min cycle (round-robin staleness order)
-    const orgsInDb = await prisma.organization.findMany({
-      where: { login: { in: targetOrgs, mode: 'insensitive' } },
-      orderBy: { updatedAt: 'asc' },
-      take: 1,
-    });
-    const existingLogins = new Set(orgsInDb.map((o) => o.login.toLowerCase()));
-    const missingLogins = targetOrgs.filter((login) => !existingLogins.has(login.toLowerCase()));
-    const selectedOrgLogins = [...missingLogins.slice(0, 1), ...orgsInDb.map((o) => o.login)].slice(0, 1);
-
-    for (const orgLogin of selectedOrgLogins) {
+    // 1. Run ongoing repository discovery across ALL 11 target organizations on EVERY incremental run
+    for (const orgLogin of targetOrgs) {
       try {
-        await reconciler.reconcileOrganization(orgLogin, config.customToken, { maxPages: 1, perPage: 10 } as any);
+        await reconciler.reconcileOrganization(orgLogin, config.customToken);
       } catch (err: any) {
         console.warn(`[Orchestrator Discovery] Repository discovery failed for organization '${orgLogin}': ${err.message || String(err)}`);
       }

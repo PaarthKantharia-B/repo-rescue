@@ -275,6 +275,11 @@ export async function discoverOrganizationRepositories(
       ineligibleCount++;
     }
 
+    // Upsert idempotently in mockDbStore.repositories
+    const existingIdx = mockDbStore.repositories.findIndex(
+      (r) => r.githubId === raw.id || r.fullName.toLowerCase() === raw.full_name.toLowerCase()
+    );
+
     const repoId = `repo-gh-${raw.id}`;
     const repoRecord: Repository = {
       id: repoId,
@@ -298,13 +303,8 @@ export async function discoverOrganizationRepositories(
       repoType: 'OPEN_SOURCE',
       maintainerActivityScore: 8.5,
       organizationId: dbOrg?.id || orgEntity?.id || orgConfig.login,
-      lastSyncedAt: now,
+      lastSyncedAt: existingIdx >= 0 ? mockDbStore.repositories[existingIdx].lastSyncedAt : undefined,
     };
-
-    // Upsert idempotently in mockDbStore.repositories
-    const existingIdx = mockDbStore.repositories.findIndex(
-      (r) => r.githubId === raw.id || r.fullName.toLowerCase() === raw.full_name.toLowerCase()
-    );
 
     if (existingIdx >= 0) {
       if (!isReadOnly) {
@@ -312,6 +312,7 @@ export async function discoverOrganizationRepositories(
           ...mockDbStore.repositories[existingIdx],
           ...repoRecord,
           id: mockDbStore.repositories[existingIdx].id, // preserve existing DB ID
+          lastSyncedAt: mockDbStore.repositories[existingIdx].lastSyncedAt, // preserve issue sync timestamp
         };
       }
       processedRepos.push(repoRecord);
@@ -360,7 +361,7 @@ export async function discoverOrganizationRepositories(
               repoType: 'OPEN_SOURCE',
               maintainerActivityScore: 8.5,
               organizationId: dbOrg?.id || undefined,
-              lastSyncedAt: new Date(now),
+              lastSyncedAt: null, // Null to ensure newly discovered repos are queued immediately (nulls: 'first')
             },
             update: {
               name: raw.name,
@@ -379,7 +380,7 @@ export async function discoverOrganizationRepositories(
               eligibilityReason: evaluation.reason,
               ecosystem: raw.language ? `${raw.language}` : 'Node.js',
               organizationId: dbOrg?.id || undefined,
-              lastSyncedAt: new Date(now),
+              // DO NOT update lastSyncedAt here; lastSyncedAt is reserved for issue reconciliation
             },
           })
         );

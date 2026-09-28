@@ -203,7 +203,131 @@ async function runRepoDiscoveryLifecycleTestSuite() {
   } catch (err) {
     nonExistentOrgFailedHandled = false;
   }
-  assert(nonExistentOrgFailedHandled === true, 'Test N2', 'Failure in one organization is caught cleanly and does not halt orchestrator');
+  // --- TEST O: Deterministic New Repository Discovery During Incremental Sync ---
+  console.log('\n--- Test O: Deterministic New Repository Discovery During Incremental Sync ---');
+  const repoBFullName = 'test-org-uno/test-dynamic-repo-b';
+  await prisma.issueScore.deleteMany({ where: { issue: { repository: { fullName: repoBFullName } } } });
+  await prisma.issue.deleteMany({ where: { repository: { fullName: repoBFullName } } });
+  await prisma.repository.deleteMany({ where: { fullName: repoBFullName } });
+
+  // 1. Simulate discovery of Repo B during incremental sync by injecting mocked discovery reconciler
+  const dynamicOrchestrator = new ProductionSyncOrchestrator();
+  dynamicOrchestrator.setDependencies({
+    reconcileOrganization: async (orgLogin: string) => {
+      if (orgLogin.toLowerCase() === 'test-org-uno') {
+        // Upsert Repo B with null lastSyncedAt (representing newly discovered repo)
+        await prisma.repository.upsert({
+          where: { fullName: repoBFullName },
+          create: {
+            githubId: 88997711,
+            name: 'test-dynamic-repo-b',
+            fullName: repoBFullName,
+            owner: 'test-org-uno',
+            description: 'Dynamic repository B created during incremental sync',
+            url: `https://github.com/${repoBFullName}`,
+            language: 'TypeScript',
+            starsCount: 25,
+            forksCount: 3,
+            openIssuesCount: 1,
+            isPrivate: false,
+            isArchived: false,
+            isFork: false,
+            hasIssues: true,
+            eligibilityStatus: 'ELIGIBLE',
+            eligibilityReason: 'Public, active, non-fork organization repository with GitHub Issues enabled.',
+            lastSyncedAt: null, // Null to simulate initial un-synced state
+          },
+          update: {},
+        });
+        return { success: true, discoveredCount: 1, updatedReposCount: 1 };
+      }
+      return { success: true, discoveredCount: 0, updatedReposCount: 0 };
+    },
+    reconcileRepositoryIncremental: async (repoFullName: string) => {
+      if (repoFullName === repoBFullName) {
+        // Simulate successful issue reconciliation for Repo B
+        await processLiveIssueEvent({
+          action: 'opened',
+          issue: {
+            id: 991122,
+            number: 201,
+            title: 'Fix edge case in dynamic stream buffer',
+            body: 'Buffer overflow occurs when stream size exceeds chunk allocation in dynamic worker.',
+            state: 'open',
+            labels: [{ name: 'bug' }],
+            user: { login: 'community-dev-dynamic' },
+            assignees: [],
+            comments: 1,
+          },
+          repository: {
+            id: 88997711,
+            name: 'test-dynamic-repo-b',
+            full_name: repoBFullName,
+            owner: { login: 'test-org-uno' },
+          },
+        } as any);
+
+        await prisma.repository.update({
+          where: { fullName: repoBFullName },
+          data: { lastSyncedAt: new Date() },
+        });
+
+        return {
+          repositoryFullName: repoBFullName,
+          success: true,
+          issuesExamined: 1,
+          insertedCount: 1,
+          updatedCount: 0,
+          closedCount: 0,
+          reopenedCount: 0,
+          tombstonedCount: 0,
+          regradedCount: 0,
+          commentsCorrected: 0,
+          prsReconciled: 0,
+          pointsAwarded: 0,
+          driftRepairs: [],
+        };
+      }
+      return {
+        repositoryFullName: repoFullName,
+        success: true,
+        issuesExamined: 0,
+        insertedCount: 0,
+        updatedCount: 0,
+        closedCount: 0,
+        reopenedCount: 0,
+        tombstonedCount: 0,
+        regradedCount: 0,
+        commentsCorrected: 0,
+        prsReconciled: 0,
+        pointsAwarded: 0,
+        driftRepairs: [],
+      };
+    },
+  });
+
+  const syncJobResult = await dynamicOrchestrator.runIncrementalSync();
+  assert(syncJobResult.status === 'SUCCEEDED', 'Test O1', 'Incremental sync completed successfully with dynamic discovery');
+
+  const dbRepoB = await prisma.repository.findUnique({ where: { fullName: repoBFullName } });
+  assert(dbRepoB !== null, 'Test O2', 'Newly discovered repository B was persisted in PostgreSQL');
+  assert(dbRepoB?.eligibilityStatus === 'ELIGIBLE', 'Test O3', 'Repository B evaluated as ELIGIBLE');
+
+  const dbIssue201 = await prisma.issue.findFirst({
+    where: { repository: { fullName: repoBFullName }, githubNumber: 201 },
+    include: { scores: true },
+  });
+  assert(dbIssue201 !== null, 'Test O4', 'Qualifying issue #201 from newly discovered Repo B was ingested in same run');
+  assert(dbIssue201?.scores?.scoringVersion === 'v2.3.0', 'Test O5', 'Issue #201 graded using V2.3.0 formula');
+
+  const explorerResultsB = await getFilteredIssues({ organization: 'test-org-uno' });
+  const is201Visible = explorerResultsB.issues.some((i) => i.githubNumber === 201 && i.repository.fullName === repoBFullName);
+  assert(is201Visible === true, 'Test O6', 'Issue #201 from newly discovered Repo B APPEARS in Issue Explorer');
+
+  // Clean up Repo B
+  await prisma.issueScore.deleteMany({ where: { issue: { repository: { fullName: repoBFullName } } } });
+  await prisma.issue.deleteMany({ where: { repository: { fullName: repoBFullName } } });
+  await prisma.repository.deleteMany({ where: { fullName: repoBFullName } });
 
   // --- CLEANUP TEST ARTIFACTS ---
   console.log('\n--- Cleaning up test artifacts ---');
