@@ -1,8 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { checkIsAdmin } from '@/lib/auth/admin-auth';
 import { prisma } from '@/lib/prisma';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
+    // 1. Enforce Server-Side Session Authentication
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized: Sign in required to access admin statistics.' },
+        { status: 401 }
+      );
+    }
+
+    // 2. Enforce Server-Side Admin Authorization BEFORE querying data
+    const isAdmin = await checkIsAdmin(session);
+    if (!isAdmin) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden: You do not have administrator access.' },
+        { status: 403 }
+      );
+    }
+
     const now = new Date();
     const past24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const past7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);

@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession, signIn, signOut } from 'next-auth/react';
-import { Shield, Sparkles, Trophy, Compass, Github, Terminal, User, LogOut, ChevronDown, BookOpen, Menu, X, MessageSquare, BarChart2, GitPullRequest } from 'lucide-react';
+import { Shield, Sparkles, Trophy, Compass, Github, Terminal, User, LogOut, ChevronDown, BookOpen, Menu, X, MessageSquare, GitPullRequest } from 'lucide-react';
 import { PointsDisplay } from '../ui/PointsDisplay';
 
 export const Navbar: React.FC = () => {
@@ -23,7 +23,6 @@ export const Navbar: React.FC = () => {
     { href: '/leaderboard', label: 'Leaderboard', icon: Trophy, activeColor: 'text-amber-400' },
     { href: '/guidance', label: 'Guidance', icon: BookOpen, activeColor: 'text-purple-400' },
     { href: '/talk-to-the-founder', label: 'Talk to Founder', icon: MessageSquare, activeColor: 'text-emerald-400' },
-    { href: '/admin/stats', label: 'Analytics', icon: BarChart2, activeColor: 'text-cyan-400' },
   ];
 
   return (
@@ -108,15 +107,6 @@ export const Navbar: React.FC = () => {
                     >
                       <GitPullRequest className="w-4 h-4 text-emerald-400" />
                       <span>My Contributions</span>
-                    </Link>
-
-                    <Link
-                      href="/admin/stats"
-                      onClick={() => setDropdownOpen(false)}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-900 hover:text-white transition-colors"
-                    >
-                      <BarChart2 className="w-4 h-4 text-cyan-400" />
-                      <span>Admin Analytics</span>
                     </Link>
 
                     <button
