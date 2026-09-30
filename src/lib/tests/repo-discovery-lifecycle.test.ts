@@ -25,29 +25,29 @@ async function runRepoDiscoveryLifecycleTestSuite() {
   }
 
   // --- PRE-TEST CLEANUP ---
-  const dummyRepoFullName = 'test-org-uno/test-newly-discovered-repo';
+  const dummyRepoFullName = 'supabase/test-newly-discovered-repo';
   await prisma.issueScore.deleteMany({ where: { issue: { repository: { fullName: dummyRepoFullName } } } });
   await prisma.issue.deleteMany({ where: { repository: { fullName: dummyRepoFullName } } });
   await prisma.repository.deleteMany({ where: { fullName: dummyRepoFullName } });
 
   // --- TEST A: Existing Repository Incremental Sync ---
   console.log('\n--- Test A: Existing Repository Incremental Sync ---');
-  const existingRepo = await prisma.repository.findUnique({ where: { fullName: 'test-org-uno/test-repo-one-' } });
-  assert(existingRepo !== null, 'Test A1', 'Existing repository test-org-uno/test-repo-one- is present');
+  const existingRepo = await prisma.repository.findUnique({ where: { fullName: 'supabase/supabase' } });
+  assert(existingRepo !== null, 'Test A1', 'Existing repository supabase/supabase is present');
 
-  const reconResultA = await reconcileRepositoryIncremental('test-org-uno/test-repo-one-');
+  const reconResultA = await reconcileRepositoryIncremental('supabase/supabase');
   assert(reconResultA.success === true, 'Test A2', 'Existing repository incremental sync succeeded');
 
   // --- TEST B & C & D: New Eligible Repository Discovery & Persistence ---
   console.log('\n--- Test B, C & D: New Eligible Repository Discovery & Persistence ---');
 
-  // Create a new simulated repository in test-org-uno via Prisma
+  // Create a new simulated repository in supabase via Prisma
   const newlyDiscoveredRepo = await prisma.repository.create({
     data: {
       githubId: 99887766,
       name: 'test-newly-discovered-repo',
       fullName: dummyRepoFullName,
-      owner: 'test-org-uno',
+      owner: 'supabase',
       description: 'Newly discovered repository for Repo Rescue lifecycle test',
       url: `https://github.com/${dummyRepoFullName}`,
       language: 'TypeScript',
@@ -90,7 +90,7 @@ async function runRepoDiscoveryLifecycleTestSuite() {
       id: 99887766,
       name: 'test-newly-discovered-repo',
       full_name: dummyRepoFullName,
-      owner: { login: 'test-org-uno' },
+      owner: { login: 'supabase' },
     },
   } as any);
 
@@ -109,7 +109,7 @@ async function runRepoDiscoveryLifecycleTestSuite() {
       id: 99887766,
       name: 'test-newly-discovered-repo',
       full_name: dummyRepoFullName,
-      owner: { login: 'test-org-uno' },
+      owner: { login: 'supabase' },
     },
   } as any);
 
@@ -128,7 +128,7 @@ async function runRepoDiscoveryLifecycleTestSuite() {
       id: 99887766,
       name: 'test-newly-discovered-repo',
       full_name: dummyRepoFullName,
-      owner: { login: 'test-org-uno' },
+      owner: { login: 'supabase' },
     },
   } as any);
 
@@ -140,7 +140,7 @@ async function runRepoDiscoveryLifecycleTestSuite() {
   assert(dbIssue101 !== null, 'Test E1', 'Qualifying open issue #101 ingested into PostgreSQL');
   assert(dbIssue101?.scores?.scoringVersion === 'v2.3.0', 'Test F1', 'Issue #101 graded using V2.3.0 scoring engine');
 
-  const explorerResults = await getFilteredIssues({ organization: 'test-org-uno' });
+  const explorerResults = await getFilteredIssues({ organization: 'supabase' });
   const is101Visible = explorerResults.issues.some((i) => i.githubNumber === 101 && i.repository.fullName === dummyRepoFullName);
   const is102Visible = explorerResults.issues.some((i) => i.githubNumber === 102 && i.repository.fullName === dummyRepoFullName);
   const is103Visible = explorerResults.issues.some((i) => i.githubNumber === 103 && i.repository.fullName === dummyRepoFullName);
@@ -152,7 +152,7 @@ async function runRepoDiscoveryLifecycleTestSuite() {
   // --- TEST K & L: Subsequent Incremental Sync Participation ---
   console.log('\n--- Test K & L: Ongoing Incremental Sync Participation ---');
   const orchestrator = new ProductionSyncOrchestrator();
-  const incJobResult = await orchestrator.runIncrementalRepoSync('test-org-uno/test-repo-one-');
+  const incJobResult = await orchestrator.runIncrementalRepoSync('supabase/supabase');
 
   assert(incJobResult.status === 'SUCCEEDED', 'Test K1', 'Newly discovered repo participated in subsequent incremental sync cycle');
 
@@ -172,7 +172,7 @@ async function runRepoDiscoveryLifecycleTestSuite() {
       id: 99887766,
       name: 'test-newly-discovered-repo',
       full_name: dummyRepoFullName,
-      owner: { login: 'test-org-uno' },
+      owner: { login: 'supabase' },
     },
   } as any);
 
@@ -183,14 +183,14 @@ async function runRepoDiscoveryLifecycleTestSuite() {
 
   // --- TEST M: Idempotency of Repository Discovery ---
   console.log('\n--- Test M: Idempotency of Repository Discovery ---');
-  const orgConfig = getOrganizationConfig('test-org-uno');
+  const orgConfig = getOrganizationConfig('supabase');
   if (orgConfig) {
-    const orgReconRes1 = await reconcileOrganization('test-org-uno');
-    const orgReconRes2 = await reconcileOrganization('test-org-uno');
+    const orgReconRes1 = await reconcileOrganization('supabase');
+    const orgReconRes2 = await reconcileOrganization('supabase');
     assert(orgReconRes1.success === true && orgReconRes2.success === true, 'Test M1', 'Repeated repository discovery execution is successful and idempotent');
 
-    const totalReposInDB = await prisma.repository.count({ where: { owner: 'test-org-uno' } });
-    assert(totalReposInDB >= 2, 'Test M2', `Total repositories in test-org-uno: ${totalReposInDB} (No duplicates created)`);
+    const totalReposInDB = await prisma.repository.count({ where: { owner: 'supabase' } });
+    assert(totalReposInDB >= 2, 'Test M2', `Total repositories in supabase: ${totalReposInDB} (No duplicates created)`);
   }
 
   // --- TEST N: Failure Isolation Across Organizations ---
@@ -205,7 +205,7 @@ async function runRepoDiscoveryLifecycleTestSuite() {
   }
   // --- TEST O: Deterministic New Repository Discovery During Incremental Sync ---
   console.log('\n--- Test O: Deterministic New Repository Discovery During Incremental Sync ---');
-  const repoBFullName = 'test-org-uno/test-dynamic-repo-b';
+  const repoBFullName = 'supabase/test-dynamic-repo-b';
   await prisma.issueScore.deleteMany({ where: { issue: { repository: { fullName: repoBFullName } } } });
   await prisma.issue.deleteMany({ where: { repository: { fullName: repoBFullName } } });
   await prisma.repository.deleteMany({ where: { fullName: repoBFullName } });
@@ -214,7 +214,7 @@ async function runRepoDiscoveryLifecycleTestSuite() {
   const dynamicOrchestrator = new ProductionSyncOrchestrator();
   dynamicOrchestrator.setDependencies({
     reconcileOrganization: async (orgLogin: string) => {
-      if (orgLogin.toLowerCase() === 'test-org-uno') {
+      if (orgLogin.toLowerCase() === 'supabase') {
         // Upsert Repo B with null lastSyncedAt (representing newly discovered repo)
         await prisma.repository.upsert({
           where: { fullName: repoBFullName },
@@ -222,7 +222,7 @@ async function runRepoDiscoveryLifecycleTestSuite() {
             githubId: 88997711,
             name: 'test-dynamic-repo-b',
             fullName: repoBFullName,
-            owner: 'test-org-uno',
+            owner: 'supabase',
             description: 'Dynamic repository B created during incremental sync',
             url: `https://github.com/${repoBFullName}`,
             language: 'TypeScript',
@@ -263,7 +263,7 @@ async function runRepoDiscoveryLifecycleTestSuite() {
             id: 88997711,
             name: 'test-dynamic-repo-b',
             full_name: repoBFullName,
-            owner: { login: 'test-org-uno' },
+            owner: { login: 'supabase' },
           },
         } as any);
 
@@ -320,7 +320,7 @@ async function runRepoDiscoveryLifecycleTestSuite() {
   assert(dbIssue201 !== null, 'Test O4', 'Qualifying issue #201 from newly discovered Repo B was ingested in same run');
   assert(dbIssue201?.scores?.scoringVersion === 'v2.3.0', 'Test O5', 'Issue #201 graded using V2.3.0 formula');
 
-  const explorerResultsB = await getFilteredIssues({ organization: 'test-org-uno' });
+  const explorerResultsB = await getFilteredIssues({ organization: 'supabase' });
   const is201Visible = explorerResultsB.issues.some((i) => i.githubNumber === 201 && i.repository.fullName === repoBFullName);
   assert(is201Visible === true, 'Test O6', 'Issue #201 from newly discovered Repo B APPEARS in Issue Explorer');
 

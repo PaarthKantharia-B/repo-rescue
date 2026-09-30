@@ -25,13 +25,13 @@ async function runAssignmentTestSuite() {
   const repoPayload = {
     id: 1392386002,
     name: 'test-repo-one-',
-    full_name: 'test-org-uno/test-repo-one-',
-    owner: { login: 'test-org-uno' },
+    full_name: 'supabase/test-repo-one-',
+    owner: { login: 'supabase' },
   };
 
   // Clean up any pre-existing test issue with githubNumber 9901 or 9902
   await prisma.issueScore.deleteMany({ where: { issue: { githubNumber: { in: [9901, 9902] } } } });
-  await prisma.issue.deleteMany({ where: { repository: { fullName: 'test-org-uno/test-repo-one-' }, githubNumber: { in: [9901, 9902] } } });
+  await prisma.issue.deleteMany({ where: { repository: { fullName: 'supabase/test-repo-one-' }, githubNumber: { in: [9901, 9902] } } });
 
   // --- TEST A: New Unassigned Issue -> Visible ---
   console.log('\n--- Test A: New Unassigned Issue Visibility ---');
@@ -57,13 +57,13 @@ async function runAssignmentTestSuite() {
   assert(syncResultA.status === 'SUCCESS' || syncResultA.status === 'UPDATED', 'Test A1', 'Unassigned issue ingested successfully');
 
   const dbIssueA = await prisma.issue.findFirst({
-    where: { repository: { fullName: 'test-org-uno/test-repo-one-' }, githubNumber: 9901 },
+    where: { repository: { fullName: 'supabase/test-repo-one-' }, githubNumber: 9901 },
     include: { scores: true },
   });
   assert(dbIssueA?.assigneeCount === 0, 'Test A2', 'assigneeCount is 0 in database');
   assert(dbIssueA?.scores?.scoringVersion === 'v2.3.0', 'Test A3', 'Scored with scoringVersion v2.3.0');
 
-  const explorerA = await getFilteredIssues({ organization: 'test-org-uno' });
+  const explorerA = await getFilteredIssues({ organization: 'supabase' });
   const isVisibleA = explorerA.issues.some((i) => i.githubNumber === 9901);
   assert(isVisibleA === true, 'Test A4', 'Unassigned issue IS VISIBLE in default Issue Explorer');
 
@@ -91,13 +91,13 @@ async function runAssignmentTestSuite() {
   assert(syncResultB.status === 'SUCCESS' || syncResultB.status === 'UPDATED', 'Test B1', 'Assigned issue ingested/synchronized');
 
   const dbIssueB = await prisma.issue.findFirst({
-    where: { repository: { fullName: 'test-org-uno/test-repo-one-' }, githubNumber: 9902 },
+    where: { repository: { fullName: 'supabase/test-repo-one-' }, githubNumber: 9902 },
     include: { scores: true },
   });
   assert(dbIssueB?.assigneeCount === 1, 'Test B2', 'assigneeCount is 1 in database');
   assert(Boolean(dbIssueB?.assignees.includes('assigned-user-alpha')), 'Test B3', 'assignees array contains assigned username');
 
-  const explorerB = await getFilteredIssues({ organization: 'test-org-uno' });
+  const explorerB = await getFilteredIssues({ organization: 'supabase' });
   const isVisibleB = explorerB.issues.some((i) => i.githubNumber === 9902);
   assert(isVisibleB === false, 'Test B4', 'Assigned issue is EXCLUDED from default Issue Explorer');
 
@@ -117,11 +117,11 @@ async function runAssignmentTestSuite() {
   assert(syncResultC.status === 'UPDATED', 'Test C1', 'Assignment change synchronized');
 
   const dbIssueC = await prisma.issue.findFirst({
-    where: { repository: { fullName: 'test-org-uno/test-repo-one-' }, githubNumber: 9901 },
+    where: { repository: { fullName: 'supabase/test-repo-one-' }, githubNumber: 9901 },
   });
   assert(dbIssueC?.assigneeCount === 1, 'Test C2', 'Database record preserved, assigneeCount updated to 1');
 
-  const explorerC = await getFilteredIssues({ organization: 'test-org-uno' });
+  const explorerC = await getFilteredIssues({ organization: 'supabase' });
   const isVisibleC = explorerC.issues.some((i) => i.githubNumber === 9901);
   assert(isVisibleC === false, 'Test C3', 'Issue DISAPPEARED from default Issue Explorer upon assignment');
 
@@ -141,11 +141,11 @@ async function runAssignmentTestSuite() {
   assert(syncResultD.status === 'UPDATED', 'Test D1', 'Unassignment change synchronized');
 
   const dbIssueD = await prisma.issue.findFirst({
-    where: { repository: { fullName: 'test-org-uno/test-repo-one-' }, githubNumber: 9901 },
+    where: { repository: { fullName: 'supabase/test-repo-one-' }, githubNumber: 9901 },
   });
   assert(dbIssueD?.assigneeCount === 0, 'Test D2', 'Database assigneeCount reset to 0');
 
-  const explorerD = await getFilteredIssues({ organization: 'test-org-uno' });
+  const explorerD = await getFilteredIssues({ organization: 'supabase' });
   const isVisibleD = explorerD.issues.some((i) => i.githubNumber === 9901);
   assert(isVisibleD === true, 'Test D3', 'Issue RETURNED to default Issue Explorer upon unassignment');
 
@@ -163,11 +163,11 @@ async function runAssignmentTestSuite() {
 
   await processLiveIssueEvent(mockMultiAssigneePayload as any);
   const dbIssueE = await prisma.issue.findFirst({
-    where: { repository: { fullName: 'test-org-uno/test-repo-one-' }, githubNumber: 9901 },
+    where: { repository: { fullName: 'supabase/test-repo-one-' }, githubNumber: 9901 },
   });
   assert(dbIssueE?.assigneeCount === 2, 'Test E1', 'Multiple assignees count set to 2');
 
-  const explorerE = await getFilteredIssues({ organization: 'test-org-uno' });
+  const explorerE = await getFilteredIssues({ organization: 'supabase' });
   assert(!explorerE.issues.some((i) => i.githubNumber === 9901), 'Test E2', 'Issue with multiple assignees is NOT visible in Explorer');
 
   // --- TEST F, G, H: Assigned + Open PR / Closed Combinations ---
@@ -178,7 +178,7 @@ async function runAssignmentTestSuite() {
     where: { repositoryId_githubNumber: { repositoryId: dbIssueE!.repositoryId, githubNumber: 9901 } },
     data: { openPrCount: 1, assigneeCount: 1, assignees: ['user-1'] },
   });
-  const explorerG = await getFilteredIssues({ organization: 'test-org-uno' });
+  const explorerG = await getFilteredIssues({ organization: 'supabase' });
   assert(!explorerG.issues.some((i) => i.githubNumber === 9901), 'Test G1', 'Assigned + Open PR issue is NOT visible');
 
   // Assigned + Closed
@@ -188,7 +188,7 @@ async function runAssignmentTestSuite() {
       data: { status: 'CLOSED', githubState: 'closed' },
     })
   );
-  const explorerH = await getFilteredIssues({ organization: 'test-org-uno' });
+  const explorerH = await getFilteredIssues({ organization: 'supabase' });
   assert(!explorerH.issues.some((i) => i.githubNumber === 9901), 'Test H1', 'Assigned + Closed issue is NOT visible');
 
   // Restore issue 9901 to OPEN and unassigned
@@ -215,13 +215,13 @@ async function runAssignmentTestSuite() {
     repository: repoPayload,
   } as any);
 
-  const explorerI = await getFilteredIssues({ organization: 'test-org-uno' });
+  const explorerI = await getFilteredIssues({ organization: 'supabase' });
   assert(!explorerI.issues.some((i) => i.githubNumber === 9901), 'Test I1', 'REST sync assignment update excluded issue from Explorer');
 
   // --- TEST K & L: Points & Idempotency Safety ---
   console.log('\n--- Test K & L: Points & Idempotency Safety ---');
   const dbIssueK = await prisma.issue.findFirst({
-    where: { repository: { fullName: 'test-org-uno/test-repo-one-' }, githubNumber: 9901 },
+    where: { repository: { fullName: 'supabase/test-repo-one-' }, githubNumber: 9901 },
     include: { scores: true },
   });
   const difficultyBefore = dbIssueK?.rrDifficulty;
@@ -240,7 +240,7 @@ async function runAssignmentTestSuite() {
   } as any);
 
   const dbIssueK2 = await prisma.issue.findFirst({
-    where: { repository: { fullName: 'test-org-uno/test-repo-one-' }, githubNumber: 9901 },
+    where: { repository: { fullName: 'supabase/test-repo-one-' }, githubNumber: 9901 },
     include: { scores: true },
   });
   assert(dbIssueK2?.rrDifficulty === difficultyBefore, 'Test K1', 'Assignment change did not modify RR Difficulty score');
@@ -248,13 +248,13 @@ async function runAssignmentTestSuite() {
   // --- TEST M & N: Target Orgs & V2.3.0 Scoring Verification ---
   console.log('\n--- Test M & N: Target Orgs & V2.3.0 Scoring Version ---');
   const targetOrgs = getTargetOrganizationLogins();
-  assert(targetOrgs.length === 11, 'Test M1', `Target organizations count remains 11`);
+  assert(targetOrgs.length === 10, 'Test M1', `Target organizations count remains 10`);
   assert(dbIssueK2?.scores?.scoringVersion === 'v2.3.0', 'Test N1', 'Scoring version remains v2.3.0');
 
   // --- Clean up test artifacts ---
   console.log('\n--- Cleaning up test artifacts ---');
   await prisma.issueScore.deleteMany({ where: { issue: { githubNumber: { in: [9901, 9902] } } } });
-  await prisma.issue.deleteMany({ where: { repository: { fullName: 'test-org-uno/test-repo-one-' }, githubNumber: { in: [9901, 9902] } } });
+  await prisma.issue.deleteMany({ where: { repository: { fullName: 'supabase/test-repo-one-' }, githubNumber: { in: [9901, 9902] } } });
 
   console.log('\n========================================================================');
   console.log(`         ASSIGNMENT TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED          `);

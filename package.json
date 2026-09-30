@@ -10,7 +10,8 @@
     "discover:issues": "npx tsx scripts/discover-issues.ts",
     "test:discovery": "npx tsx src/lib/tests/discovery.ts",
     "ingest:issues": "npx tsx scripts/ingest-issues.ts",
-    "test:ingestion": "npx tsx src/lib/tests/ingestion.ts"
+    "test:ingestion": "npx tsx src/lib/tests/ingestion.ts",
+    "sync:award": "npx tsx scripts/sync-and-award.ts"
   },
   "dependencies": {
     "@next-auth/prisma-adapter": "^1.0.7",

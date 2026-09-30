@@ -145,20 +145,6 @@ export const TARGET_ORGANIZATIONS_CONFIG: OrganizationConfig[] = [
     syncPrActivity: true,
     reconciliationEnabled: true,
   },
-  {
-    githubId: 334940138,
-    login: 'test-org-uno',
-    name: 'test-org-uno',
-    description: 'Test Organization Uno for Repo Rescue MVP lifecycle testing.',
-    avatarUrl: 'https://avatars.githubusercontent.com/u/334940138?v=4',
-    htmlUrl: 'https://github.com/test-org-uno',
-    autoDiscoverRepos: true,
-    syncIssues: true,
-    syncComments: true,
-    syncLabels: true,
-    syncPrActivity: true,
-    reconciliationEnabled: true,
-  },
 ];
 
 /**

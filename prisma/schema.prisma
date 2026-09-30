@@ -301,6 +301,14 @@ model Contribution {
 
   status        ContributionStatus @default(CLAIMED)
   
+  approach      String?            @db.Text
+  wasAssigned   Boolean            @default(false)
+  isPartner     Boolean            @default(true)
+  linesAdded    Int                @default(0)
+  linesDeleted  Int                @default(0)
+  filesChanged  Int                @default(0)
+  language      String?
+
   rrPoints      Float
   verifiedAt    DateTime           @default(now())
 
@@ -357,6 +365,19 @@ model WebhookDelivery {
   processedAt  DateTime @default(now())
 
   @@index([deliveryId])
+}
+
+model PageView {
+  id        String   @id @default(cuid())
+  path      String   @default("/")
+  visitorId String?
+  userId    String?
+  userAgent String?  @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([path])
+  @@index([visitorId])
 }
 
 

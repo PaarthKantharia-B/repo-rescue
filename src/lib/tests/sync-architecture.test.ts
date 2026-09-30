@@ -46,8 +46,8 @@ async function runTestSuite() {
     repository: {
       id: 1392386002,
       name: 'test-repo-one-',
-      full_name: 'test-org-uno/test-repo-one-',
-      owner: { login: 'test-org-uno' },
+      full_name: 'supabase/test-repo-one-',
+      owner: { login: 'supabase' },
     },
   };
 
@@ -57,7 +57,7 @@ async function runTestSuite() {
   assert(typeof syncResultA.gradingScore === 'number' && syncResultA.gradingScore > 0, 'Test A3', `RR Difficulty calculated: ${syncResultA.gradingScore}`);
 
   const dbIssueA = await prisma.issue.findFirst({
-    where: { repository: { fullName: 'test-org-uno/test-repo-one-' }, githubNumber: 9001 },
+    where: { repository: { fullName: 'supabase/test-repo-one-' }, githubNumber: 9001 },
     include: { scores: true },
   });
   assert(dbIssueA !== null, 'Test A4', 'Issue record persisted in PostgreSQL');
@@ -94,7 +94,7 @@ async function runTestSuite() {
   assert(syncResultC.status === 'UPDATED', 'Test C1', 'Comment count update processed');
 
   const dbIssueC = await prisma.issue.findFirst({
-    where: { repository: { fullName: 'test-org-uno/test-repo-one-' }, githubNumber: 9001 },
+    where: { repository: { fullName: 'supabase/test-repo-one-' }, githubNumber: 9001 },
   });
   assert(dbIssueC?.commentsCount === 5, 'Test C2', `commentsCount updated to ${dbIssueC?.commentsCount}`);
 
@@ -118,11 +118,11 @@ async function runTestSuite() {
   assert(syncResultD.syncStatus === 'SUCCESS', 'Test D1', 'PR open sync succeeded');
 
   const dbIssueD = await prisma.issue.findFirst({
-    where: { repository: { fullName: 'test-org-uno/test-repo-one-' }, githubNumber: 9001 },
+    where: { repository: { fullName: 'supabase/test-repo-one-' }, githubNumber: 9001 },
   });
   assert(dbIssueD?.openPrCount === 1, 'Test D2', 'Issue openPrCount updated to 1');
 
-  const explorerFeed = await getFilteredIssues({ organization: 'test-org-uno', prActivity: 'OPEN_NO_PR' });
+  const explorerFeed = await getFilteredIssues({ organization: 'supabase', prActivity: 'OPEN_NO_PR' });
   const inDefaultFeed = explorerFeed.issues.some((i) => i.githubNumber === 9001);
   assert(!inDefaultFeed, 'Test D3', 'Issue with open PR excluded from default OPEN_NO_PR Explorer feed');
 
@@ -175,7 +175,7 @@ async function runTestSuite() {
   assert(syncResultF.status === 'UPDATED', 'Test F1', 'Issue close event processed');
 
   const dbIssueF = await prisma.issue.findFirst({
-    where: { repository: { fullName: 'test-org-uno/test-repo-one-' }, githubNumber: 9001 },
+    where: { repository: { fullName: 'supabase/test-repo-one-' }, githubNumber: 9001 },
   });
   assert(dbIssueF?.status === 'CLOSED', 'Test F2', 'Database issue status set to CLOSED');
 
@@ -196,7 +196,7 @@ async function runTestSuite() {
   assert(syncResultG.gradingRan === true, 'Test G2', 'Reopened issue triggered V2.3.0 regrading');
 
   const dbIssueG = await prisma.issue.findFirst({
-    where: { repository: { fullName: 'test-org-uno/test-repo-one-' }, githubNumber: 9001 },
+    where: { repository: { fullName: 'supabase/test-repo-one-' }, githubNumber: 9001 },
   });
   assert(dbIssueG?.status === 'OPEN', 'Test G3', 'Database issue status restored to OPEN');
 
@@ -215,7 +215,7 @@ async function runTestSuite() {
   assert(syncResultH.status === 'UPDATED', 'Test H1', 'Issue deletion processed');
 
   const dbIssueH = await prisma.issue.findFirst({
-    where: { repository: { fullName: 'test-org-uno/test-repo-one-' }, githubNumber: 9001 },
+    where: { repository: { fullName: 'supabase/test-repo-one-' }, githubNumber: 9001 },
   });
   assert(dbIssueH?.status === 'CLOSED', 'Test H2', 'Deleted issue durable tombstone applied');
 
@@ -228,28 +228,28 @@ async function runTestSuite() {
   // --- TEST O: Multi-Organization Configuration Verification ---
   console.log('\n--- Test O: Multi-Organization Config Verification ---');
   const targetLogins = getTargetOrganizationLogins();
-  assert(targetLogins.length === 11, 'Test O1', `All 11 target organizations configured (Count: ${targetLogins.length})`);
-  assert(targetLogins.includes('test-org-uno'), 'Test O2', "test-org-uno is present in target organization list");
+  assert(targetLogins.length === 10, 'Test O1', `All 10 target organizations configured (Count: ${targetLogins.length})`);
+  assert(!targetLogins.includes('test-org-uno'), 'Test O2', "test-org-uno is NOT present in target organization list");
 
   // --- TEST Q & R & S: Sync Coordinator, Locking, and On-Demand Cooldown ---
   console.log('\n--- Test Q, R & S: Sync Coordinator & On-Demand Freshness ---');
   const testOrchestrator = new ProductionSyncOrchestrator();
 
-  const acquired1 = testOrchestrator.acquireLock('test-org-uno/test-repo-one-', 'job-1', 30000);
-  assert(acquired1 === true, 'Test Q1', 'Lock acquired for test-org-uno/test-repo-one-');
+  const acquired1 = testOrchestrator.acquireLock('supabase/test-repo-one-', 'job-1', 30000);
+  assert(acquired1 === true, 'Test Q1', 'Lock acquired for supabase/test-repo-one-');
 
-  const acquired2 = testOrchestrator.acquireLock('test-org-uno/test-repo-one-', 'job-2', 30000);
+  const acquired2 = testOrchestrator.acquireLock('supabase/test-repo-one-', 'job-2', 30000);
   assert(acquired2 === false, 'Test R1', 'Prevented duplicate concurrent lock on same repository');
 
-  testOrchestrator.releaseLock('test-org-uno/test-repo-one-', 'job-1');
+  testOrchestrator.releaseLock('supabase/test-repo-one-', 'job-1');
 
   // Update repo lastSyncedAt to current timestamp to verify cooldown
   await prisma.repository.update({
-    where: { fullName: 'test-org-uno/test-repo-one-' },
+    where: { fullName: 'supabase/test-repo-one-' },
     data: { lastSyncedAt: new Date() },
   });
 
-  const freshnessResult1 = await testOrchestrator.checkOnDemandFreshness('test-org-uno/test-repo-one-', 120000);
+  const freshnessResult1 = await testOrchestrator.checkOnDemandFreshness('supabase/test-repo-one-', 120000);
   assert(freshnessResult1.triggered === false, 'Test S1', 'On-demand freshness check respected 2-minute cooldown window');
 
   // --- TEST T: External Scheduler Authorization ---
@@ -296,7 +296,7 @@ async function runTestSuite() {
   console.log('\n--- Cleaning up test artifacts ---');
   await prisma.pullRequest.deleteMany({ where: { githubId: 88880001 } });
   await prisma.issueScore.deleteMany({ where: { issue: { githubNumber: 9001 } } });
-  await prisma.issue.deleteMany({ where: { repository: { fullName: 'test-org-uno/test-repo-one-' }, githubNumber: 9001 } });
+  await prisma.issue.deleteMany({ where: { repository: { fullName: 'supabase/test-repo-one-' }, githubNumber: 9001 } });
   await prisma.user.deleteMany({ where: { githubUsername: 'test-contributor-dev' } });
 
   console.log('\n========================================================================');

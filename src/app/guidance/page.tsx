@@ -367,16 +367,16 @@ export default function GuidancePage() {
             </p>
             <div className="space-y-3 font-mono text-xs">
               <div className="p-3 rounded-lg border border-slate-800 bg-slate-900/70 space-y-1">
-                <div className="text-blue-300 font-bold break-words">"Validate email format in signup route"</div>
+                <div className="text-blue-300 font-bold break-words">&quot;Validate email format in signup route&quot;</div>
                 <div className="text-slate-400 text-[11px] font-sans">
-                  Graded as a <strong className="text-slate-200">code bug (~3.5)</strong> despite containing the word "format", because it represents route input validation logic.
+                  Graded as a <strong className="text-slate-200">code bug (~3.5)</strong> despite containing the word &quot;format&quot;, because it represents route input validation logic.
                 </div>
               </div>
 
               <div className="p-3 rounded-lg border border-slate-800 bg-slate-900/70 space-y-1">
-                <div className="text-blue-300 font-bold break-words">"Fix typo in DB schema setup guide"</div>
+                <div className="text-blue-300 font-bold break-words">&quot;Fix typo in DB schema setup guide&quot;</div>
                 <div className="text-slate-400 text-[11px] font-sans">
-                  Graded as a <strong className="text-slate-200">documentation task (~0.4)</strong> despite technical terms "DB" and "schema", because the action is correcting documentation text.
+                  Graded as a <strong className="text-slate-200">documentation task (~0.4)</strong> despite technical terms &quot;DB&quot; and &quot;schema&quot;, because the action is correcting documentation text.
                 </div>
               </div>
             </div>

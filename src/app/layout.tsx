@@ -4,6 +4,7 @@ import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { AuthProvider } from "@/components/providers/AuthProvider";
+import { VisitorTracker } from "@/components/providers/VisitorTracker";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -29,6 +30,7 @@ export default function RootLayout({
     <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable} dark`}>
       <body className="min-h-screen flex flex-col justify-between bg-[#070a11] text-slate-100 font-sans">
         <AuthProvider>
+          <VisitorTracker />
           <div>
             <Navbar />
             <main>{children}</main>
