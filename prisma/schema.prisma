@@ -313,6 +313,7 @@ model Contribution {
   verifiedAt    DateTime           @default(now())
 
   ledgerEntry   PointsLedger?
+  analysis      ContributionAnalysis?
 
   @@unique([userId, issueId])
   @@index([userId])
@@ -379,5 +380,37 @@ model PageView {
   @@index([path])
   @@index([visitorId])
 }
+
+model ContributionAnalysis {
+  id                  String       @id @default(cuid())
+  contributionId      String       @unique
+  contribution        Contribution @relation(fields: [contributionId], references: [id], onDelete: Cascade)
+
+  problem             String       @db.Text
+  investigation       String       @db.Text
+  approach            String       @db.Text
+  techniques          String[]     @default([])
+  implementation      Json?        // Array of { commitSha?: string, title: string, url?: string, description?: string }
+  tradeoffs           String[]     @default([])
+  result              String       @db.Text
+  evidence            Json?        // Array of { type: string, label: string, url: string, verified: boolean }
+  confidence          String       @default("HIGH") // "HIGH", "MEDIUM", "LOW"
+  
+  // Contributor Reflection
+  contributorLearned  String?      @db.Text
+
+  // Metadata & Editing Audit
+  modelVersion        String       @default("v1.0.0")
+  generatedAt         DateTime     @default(now())
+  contributorEdited   Boolean      @default(false)
+  contributorEditedAt DateTime?
+
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  @@index([contributionId])
+  @@index([confidence])
+}
+
 
 

@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { CaseStudyData, synthesizeEvidenceAnalysis, extractEvidenceBasedTechniques } from '@/lib/ai/case-study-service';
 
 export interface TimeSeriesPoint {
   date: string;
@@ -75,6 +76,8 @@ export interface ContributionHistoryItem {
   language: string;
   category: string;
   area: string;
+  techniques: string[];
+  analysis?: CaseStudyData | null;
 }
 
 export interface ContributionAnalyticsData {
@@ -230,6 +233,7 @@ export async function getContributionAnalytics(username: string): Promise<Contri
         include: {
           issue: { include: { repository: { include: { organization: true } } } },
           pullRequest: true,
+          analysis: true,
         },
         orderBy: { verifiedAt: 'desc' },
       },
@@ -326,6 +330,48 @@ export async function getContributionAnalytics(username: string): Promise<Contri
     const isAssigned = c.wasAssigned || (issue.assignees && user.githubUsername ? issue.assignees.map(a => a.toLowerCase()).includes(user.githubUsername.toLowerCase()) : false);
     const isPartnerOrg = c.isPartner !== undefined ? c.isPartner : (repo.organizationId !== null);
 
+    const techniques = c.analysis?.techniques && c.analysis.techniques.length > 0
+      ? c.analysis.techniques
+      : extractEvidenceBasedTechniques(issue.title, issue.body, issue.labels, lang, eco, c.filesChanged || 1);
+
+    const synthAnalysis = synthesizeEvidenceAnalysis(c);
+
+    const caseStudyData: CaseStudyData = c.analysis ? {
+      id: c.analysis.id,
+      contributionId: c.analysis.contributionId,
+      problem: c.analysis.problem,
+      investigation: c.analysis.investigation,
+      approach: c.analysis.approach,
+      techniques: c.analysis.techniques,
+      implementation: (c.analysis.implementation as any) || synthAnalysis.implementation,
+      tradeoffs: c.analysis.tradeoffs,
+      result: c.analysis.result,
+      evidence: (c.analysis.evidence as any) || synthAnalysis.evidence,
+      confidence: (c.analysis.confidence as any) || 'HIGH',
+      contributorLearned: c.analysis.contributorLearned,
+      modelVersion: c.analysis.modelVersion,
+      generatedAt: c.analysis.generatedAt.toISOString(),
+      contributorEdited: c.analysis.contributorEdited,
+      contributorEditedAt: c.analysis.contributorEditedAt ? c.analysis.contributorEditedAt.toISOString() : null,
+    } : {
+      id: `synth-${c.id}`,
+      contributionId: c.id,
+      problem: synthAnalysis.problem,
+      investigation: synthAnalysis.investigation,
+      approach: synthAnalysis.approach,
+      techniques: synthAnalysis.techniques,
+      implementation: synthAnalysis.implementation,
+      tradeoffs: synthAnalysis.tradeoffs,
+      result: synthAnalysis.result,
+      evidence: synthAnalysis.evidence,
+      confidence: synthAnalysis.confidence,
+      contributorLearned: null,
+      modelVersion: 'v1.0.0',
+      generatedAt: new Date(c.verifiedAt).toISOString(),
+      contributorEdited: false,
+      contributorEditedAt: null,
+    };
+
     return {
       id: c.id,
       issueTitle: issue.title,
@@ -353,6 +399,8 @@ export async function getContributionAnalytics(username: string): Promise<Contri
       language: lang,
       category,
       area,
+      techniques,
+      analysis: caseStudyData,
     };
   });
 
@@ -433,11 +481,14 @@ export async function getContributionAnalytics(username: string): Promise<Contri
     .map(([name, count]) => ({ name, count, percentage: Math.round((count / totalVerifiedCount) * 100) }))
     .sort((a, b) => b.count - a.count);
 
-  // 6. Verified Capabilities (Skill Evidence Layer)
+  // 6. Verified Capabilities (Technical Techniques & Areas Evidence Layer)
   const capabilityMap = new Map<string, VerifiedCapability>();
   history.forEach((item) => {
-    const capName = `${item.area} Engineering`;
-    const existing = capabilityMap.get(capName);
+    // Add Area Capability
+    const areaCapName = `${item.area} Engineering`;
+    // Add Technique Capabilities
+    const techCapNames = item.techniques || [];
+    const allCapNames = Array.from(new Set([areaCapName, ...techCapNames]));
 
     const contribRef = {
       id: item.id,
@@ -453,19 +504,24 @@ export async function getContributionAnalytics(username: string): Promise<Contri
       language: item.language,
     };
 
-    if (existing) {
-      existing.count++;
-      existing.percentage = Math.round((existing.count / totalVerifiedCount) * 100);
-      existing.contributions.push(contribRef);
-    } else {
-      capabilityMap.set(capName, {
-        id: capName.toLowerCase().replace(/\s+/g, '-'),
-        name: capName,
-        count: 1,
-        percentage: Math.round((1 / totalVerifiedCount) * 100),
-        contributions: [contribRef],
-      });
-    }
+    allCapNames.forEach((capName) => {
+      const existing = capabilityMap.get(capName);
+      if (existing) {
+        if (!existing.contributions.some((c) => c.id === item.id)) {
+          existing.count++;
+          existing.percentage = Math.round((existing.count / totalVerifiedCount) * 100);
+          existing.contributions.push(contribRef);
+        }
+      } else {
+        capabilityMap.set(capName, {
+          id: capName.toLowerCase().replace(/\s+/g, '-'),
+          name: capName,
+          count: 1,
+          percentage: Math.round((1 / totalVerifiedCount) * 100),
+          contributions: [contribRef],
+        });
+      }
+    });
   });
   const capabilities = Array.from(capabilityMap.values()).sort((a, b) => b.count - a.count);
 

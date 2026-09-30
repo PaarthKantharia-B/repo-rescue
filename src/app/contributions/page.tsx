@@ -4,13 +4,15 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { getContributionAnalytics } from '@/lib/analytics/contribution-analytics-service';
-import { ContributionAnalyticsView } from '@/components/contributions/ContributionAnalyticsView';
+import { EngineeringJournalView } from '@/components/contributions/EngineeringJournalView';
 import { prisma } from '@/lib/prisma';
 
 export const metadata: Metadata = {
-  title: 'My Contribution Analytics | Repo Rescue',
-  description: 'Understand what your open-source contributions prove about you. High-performance developer analytics and contribution intelligence.',
+  title: 'Engineering Journal | Repo Rescue',
+  description: 'A verified history of the engineering problems you have solved through open source.',
 };
+
+export const dynamic = 'force-dynamic';
 
 export default async function MyContributionsPage() {
   // 1. Enforce Authenticated Session (Strict Access Requirement)
@@ -45,5 +47,5 @@ export default async function MyContributionsPage() {
     redirect('/auth/signin?callbackUrl=/contributions');
   }
 
-  return <ContributionAnalyticsView data={data} />;
+  return <EngineeringJournalView data={data} isOwner={true} />;
 }
