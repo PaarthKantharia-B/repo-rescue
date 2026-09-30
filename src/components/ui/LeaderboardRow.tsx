@@ -29,7 +29,7 @@ export const LeaderboardRow: React.FC<LeaderboardRowProps> = ({ contributor, cla
           />
           <div>
             <Link
-              href={`/contributors/${contributor.githubUsername}`}
+              href={`/profile/${contributor.githubUsername}`}
               className="font-bold text-slate-100 hover:text-blue-400 transition-colors flex items-center gap-1.5"
             >
               <span>{contributor.name}</span>

@@ -93,7 +93,7 @@ export const Navbar: React.FC = () => {
                 {dropdownOpen && (
                   <div className="absolute right-0 mt-2 w-48 rounded-xl border border-slate-800 bg-slate-950 p-2 shadow-2xl space-y-1 font-mono text-xs z-50">
                     <Link
-                      href={`/contributors/${username}`}
+                      href={`/profile/${username}`}
                       onClick={() => setDropdownOpen(false)}
                       className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-900 hover:text-white transition-colors"
                     >
