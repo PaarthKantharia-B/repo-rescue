@@ -9,9 +9,8 @@ import { prisma } from '@/lib/prisma';
 export function getAdminUsernames(): string[] {
   const envAdmins = process.env.ADMIN_GITHUB_USERNAMES || process.env.ADMIN_USERS;
   
-  if (!envAdmins) {
-    // Default fallback to project owner if environment variable is not explicitly set
-    return ['paarthkantharia-b'];
+  if (!envAdmins || !envAdmins.trim()) {
+    return [];
   }
 
   return envAdmins
