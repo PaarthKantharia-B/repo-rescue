@@ -51,20 +51,28 @@ export interface RepoFootprintItem {
 
 export interface ContributionHistoryItem {
   id: string;
+  prTitle: string;
+  prNumber: number;
+  prUrl: string;
+  prStatus: 'MERGED' | 'OPEN' | 'CLOSED' | string;
+  openedAt?: string | null;
+  closedAt?: string | null;
+  mergedAt?: string | null;
+
+  linkedIssueNumber?: number | null;
+  linkedIssueTitle?: string | null;
+  linkedIssueUrl?: string | null;
+  issueBody?: string | null;
+
   issueTitle: string;
   issueUrl: string;
-  issueBody: string | null;
   issueId: string;
   repoFullName: string;
   repoUrl: string;
   orgName: string;
   orgAvatar: string | null;
-  prNumber: number;
-  prUrl: string;
-  prStatus: string;
   rrDifficulty: number;
   rrPoints: number;
-  mergedAt: string;
   verifiedAtRaw: Date;
   status: string;
   approach: string | null;
@@ -78,6 +86,11 @@ export interface ContributionHistoryItem {
   area: string;
   techniques: string[];
   analysis?: CaseStudyData | null;
+  diffPatch?: {
+    before: string;
+    after: string;
+    language?: string;
+  } | null;
 }
 
 export interface ContributionAnalyticsData {
@@ -280,12 +293,16 @@ export async function getContributionAnalytics(username: string): Promise<Contri
     const eco = issue?.ecosystem || repo.ecosystem || 'Node.js';
     const repoType = repo.repoType || 'OPEN_SOURCE';
 
-    const titleText = issue?.title || pr.title;
+    const actualPrTitle = pr.title && pr.title.trim().length > 0 ? pr.title : (issue?.title || 'Untitled Pull Request');
+    const actualPrNumber = pr.githubNumber || 0;
+    const linkedIssueNumber = issue?.githubNumber ?? null;
+    const linkedIssueTitle = issue?.title ?? null;
+    const linkedIssueUrl = issue ? `/issues/${issue.id}` : null;
     const bodyText = issue?.body || null;
     const labelsList = issue?.labels || [];
 
-    const category = classifyContributionType(titleText, bodyText, labelsList);
-    const area = classifyTechnicalArea(lang, eco, repoType, titleText);
+    const category = classifyContributionType(actualPrTitle, bodyText, labelsList);
+    const area = classifyTechnicalArea(lang, eco, repoType, actualPrTitle);
 
     const prStatusStr = pr.isMerged
       ? 'MERGED'
@@ -299,7 +316,7 @@ export async function getContributionAnalytics(username: string): Promise<Contri
     const techniques = isVerifiedMerged && contrib?.analysis?.techniques && contrib.analysis.techniques.length > 0
       ? contrib.analysis.techniques
       : isVerifiedMerged && issue
-      ? extractEvidenceBasedTechniques(titleText, bodyText, labelsList, lang, eco, contrib?.filesChanged || 1)
+      ? extractEvidenceBasedTechniques(actualPrTitle, bodyText, labelsList, lang, eco, contrib?.filesChanged || 1)
       : [];
 
     let caseStudyData: CaseStudyData | null = null;
@@ -311,12 +328,16 @@ export async function getContributionAnalytics(username: string): Promise<Contri
         problem: contrib.analysis.problem,
         investigation: contrib.analysis.investigation,
         approach: contrib.analysis.approach,
+        whatChanged: (contrib.analysis as any).whatChanged || synthAnalysis.whatChanged,
         techniques: contrib.analysis.techniques,
+        techniqueDetails: (contrib.analysis as any).techniqueDetails || synthAnalysis.techniqueDetails,
         implementation: (contrib.analysis.implementation as any) || synthAnalysis.implementation,
         tradeoffs: contrib.analysis.tradeoffs,
         result: contrib.analysis.result,
         evidence: (contrib.analysis.evidence as any) || synthAnalysis.evidence,
         confidence: (contrib.analysis.confidence as any) || 'HIGH',
+        analysisCoverage: ((contrib.analysis as any).analysisCoverage as any) || synthAnalysis.analysisCoverage,
+        diffPatch: (contrib.analysis as any).diffPatch || synthAnalysis.diffPatch,
         contributorLearned: contrib.analysis.contributorLearned,
         modelVersion: contrib.analysis.modelVersion,
         generatedAt: contrib.analysis.generatedAt.toISOString(),
@@ -328,12 +349,16 @@ export async function getContributionAnalytics(username: string): Promise<Contri
         problem: synthAnalysis.problem,
         investigation: synthAnalysis.investigation,
         approach: synthAnalysis.approach,
+        whatChanged: synthAnalysis.whatChanged,
         techniques: synthAnalysis.techniques,
+        techniqueDetails: synthAnalysis.techniqueDetails,
         implementation: synthAnalysis.implementation,
         tradeoffs: synthAnalysis.tradeoffs,
         result: synthAnalysis.result,
         evidence: synthAnalysis.evidence,
         confidence: synthAnalysis.confidence,
+        analysisCoverage: synthAnalysis.analysisCoverage,
+        diffPatch: synthAnalysis.diffPatch,
         contributorLearned: null,
         modelVersion: 'v1.0.0',
         generatedAt: new Date(contrib.verifiedAt).toISOString(),
@@ -345,22 +370,35 @@ export async function getContributionAnalytics(username: string): Promise<Contri
     const itemKey = contrib ? contrib.id : pr.id;
     const rawDate = pr.mergedAt || contrib?.verifiedAt || pr.closedAt || pr.openedAt || pr.createdAt || new Date();
 
+    const formattedOpened = pr.openedAt ? new Date(pr.openedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+    const formattedClosed = pr.closedAt ? new Date(pr.closedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+    const formattedMerged = pr.mergedAt ? new Date(pr.mergedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : (pr.isMerged ? 'Merged' : null);
+
     historyMap.set(itemKey, {
       id: itemKey,
-      issueTitle: titleText,
-      issueUrl: issue ? `/issues/${issue.id}` : pr.url,
+      prTitle: actualPrTitle,
+      prNumber: actualPrNumber,
+      prUrl: pr.url || repo.url,
+      prStatus: prStatusStr,
+      openedAt: formattedOpened,
+      closedAt: formattedClosed,
+      mergedAt: formattedMerged,
+
+      linkedIssueNumber,
+      linkedIssueTitle,
+      linkedIssueUrl,
       issueBody: bodyText,
+
+      issueTitle: actualPrTitle,
+      issueUrl: linkedIssueUrl || pr.url,
       issueId: issue?.id || '',
+
       repoFullName: repo.fullName,
       repoUrl: repo.url,
       orgName: repo.organization?.name || repo.organization?.login || repo.owner || 'Open Source',
       orgAvatar: repo.organization?.avatarUrl ?? null,
-      prNumber: pr.githubNumber,
-      prUrl: pr.url,
-      prStatus: prStatusStr,
       rrDifficulty: isVerifiedMerged && issue ? issue.rrDifficulty : 0,
       rrPoints: isVerifiedMerged && contrib ? contrib.rrPoints : 0,
-      mergedAt: rawDate ? new Date(rawDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recent',
       verifiedAtRaw: new Date(rawDate),
       status: contrib?.status || prStatusStr,
       approach: contrib?.approach ?? null,
@@ -374,6 +412,7 @@ export async function getContributionAnalytics(username: string): Promise<Contri
       area,
       techniques,
       analysis: caseStudyData,
+      diffPatch: null,
     });
   });
 
@@ -401,12 +440,16 @@ export async function getContributionAnalytics(username: string): Promise<Contri
         problem: c.analysis.problem,
         investigation: c.analysis.investigation,
         approach: c.analysis.approach,
+        whatChanged: (c.analysis as any).whatChanged || synthAnalysis.whatChanged,
         techniques: c.analysis.techniques,
+        techniqueDetails: (c.analysis as any).techniqueDetails || synthAnalysis.techniqueDetails,
         implementation: (c.analysis.implementation as any) || synthAnalysis.implementation,
         tradeoffs: c.analysis.tradeoffs,
         result: c.analysis.result,
         evidence: (c.analysis.evidence as any) || synthAnalysis.evidence,
         confidence: (c.analysis.confidence as any) || 'HIGH',
+        analysisCoverage: ((c.analysis as any).analysisCoverage as any) || synthAnalysis.analysisCoverage,
+        diffPatch: (c.analysis as any).diffPatch || synthAnalysis.diffPatch,
         contributorLearned: c.analysis.contributorLearned,
         modelVersion: c.analysis.modelVersion,
         generatedAt: c.analysis.generatedAt.toISOString(),
@@ -418,12 +461,16 @@ export async function getContributionAnalytics(username: string): Promise<Contri
         problem: synthAnalysis.problem,
         investigation: synthAnalysis.investigation,
         approach: synthAnalysis.approach,
+        whatChanged: synthAnalysis.whatChanged,
         techniques: synthAnalysis.techniques,
+        techniqueDetails: synthAnalysis.techniqueDetails,
         implementation: synthAnalysis.implementation,
         tradeoffs: synthAnalysis.tradeoffs,
         result: synthAnalysis.result,
         evidence: synthAnalysis.evidence,
         confidence: synthAnalysis.confidence,
+        analysisCoverage: synthAnalysis.analysisCoverage,
+        diffPatch: synthAnalysis.diffPatch,
         contributorLearned: null,
         modelVersion: 'v1.0.0',
         generatedAt: new Date(c.verifiedAt).toISOString(),
@@ -433,20 +480,28 @@ export async function getContributionAnalytics(username: string): Promise<Contri
 
       historyMap.set(c.id, {
         id: c.id,
-        issueTitle: issue.title,
-        issueUrl: `/issues/${issue.id}`,
+        prTitle: pr?.title || issue.title,
+        prNumber: pr?.githubNumber || 0,
+        prUrl: pr?.url || repo.url,
+        prStatus: (pr?.isMerged ? 'MERGED' : pr?.status || 'MERGED') as any,
+        openedAt: pr?.openedAt ? new Date(pr.openedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null,
+        closedAt: pr?.closedAt ? new Date(pr.closedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null,
+        mergedAt: new Date(c.verifiedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+
+        linkedIssueNumber: issue.githubNumber,
+        linkedIssueTitle: issue.title,
+        linkedIssueUrl: `/issues/${issue.id}`,
         issueBody: issue.body,
+
+        issueTitle: pr?.title || issue.title,
+        issueUrl: `/issues/${issue.id}`,
         issueId: issue.id,
         repoFullName: repo.fullName,
         repoUrl: repo.url,
         orgName: repo.organization?.name || repo.organization?.login || repo.owner || 'Open Source',
         orgAvatar: repo.organization?.avatarUrl ?? null,
-        prNumber: pr?.githubNumber ?? 0,
-        prUrl: pr?.url ?? '',
-        prStatus: pr?.status || (pr?.isMerged ? 'MERGED' : 'OPEN'),
         rrDifficulty: issue.rrDifficulty,
         rrPoints: c.rrPoints,
-        mergedAt: new Date(c.verifiedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
         verifiedAtRaw: c.verifiedAt,
         status: c.status,
         approach: c.approach ?? null,
@@ -460,6 +515,7 @@ export async function getContributionAnalytics(username: string): Promise<Contri
         area,
         techniques,
         analysis: caseStudyData,
+        diffPatch: null,
       });
     }
   });
@@ -635,7 +691,7 @@ export async function getContributionAnalytics(username: string): Promise<Contri
       rrDifficulty: item.rrDifficulty,
       rrPoints: item.rrPoints,
       approach: item.approach,
-      mergedAt: item.mergedAt,
+      mergedAt: item.mergedAt || 'Recent',
       language: item.language,
     };
 

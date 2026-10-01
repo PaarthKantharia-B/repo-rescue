@@ -1,5 +1,18 @@
 import { prisma } from '@/lib/prisma';
 import { CaseStudyAnalysisSchema, CaseStudyAnalysisInput } from './case-study-schema';
+import { analyzePullRequestDiff, fetchGithubPullRequestFiles, GitHubPullRequestDiffData } from './diff-analysis-engine';
+
+export interface WhatChangedItem {
+  statement: string;
+  evidenceFiles: string[];
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+}
+
+export interface TechniqueDetailItem {
+  name: string;
+  evidenceFiles: string[];
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+}
 
 export interface CaseStudyData {
   id: string;
@@ -7,12 +20,20 @@ export interface CaseStudyData {
   problem: string;
   investigation: string;
   approach: string;
+  whatChanged: WhatChangedItem[];
   techniques: string[];
+  techniqueDetails: TechniqueDetailItem[];
   implementation: { commitSha?: string; title: string; url?: string; description?: string }[];
   tradeoffs: string[];
   result: string;
   evidence: { type: string; label: string; url: string; verified: boolean }[];
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  analysisCoverage: 'FULL_DIFF' | 'PARTIAL_DIFF' | 'METADATA_ONLY';
+  diffPatch?: {
+    before: string;
+    after: string;
+    filename?: string;
+  } | null;
   contributorLearned: string | null;
   modelVersion: string;
   generatedAt: string;
@@ -68,13 +89,16 @@ export function extractEvidenceBasedTechniques(
 }
 
 /**
- * Generates an evidence-backed analysis structure from verified GitHub contribution data.
+ * Generates an evidence-backed analysis structure from verified GitHub contribution data and raw PR diffs.
  */
-export function synthesizeEvidenceAnalysis(contribution: any): CaseStudyAnalysisInput {
+export function synthesizeEvidenceAnalysis(
+  contribution: any,
+  diffData?: GitHubPullRequestDiffData | null
+): CaseStudyAnalysisInput {
   const issue = contribution.issue;
   const repo = issue?.repository;
   const pr = contribution.pullRequest;
-  const title = issue?.title || 'Merged Open Source Contribution';
+  const title = issue?.title || pr?.title || 'Merged Open Source Contribution';
   const body = issue?.body || '';
   const prTitle = pr?.title || title;
   const lang = contribution.language || issue?.language || repo?.language || 'TypeScript';
@@ -82,22 +106,33 @@ export function synthesizeEvidenceAnalysis(contribution: any): CaseStudyAnalysis
   const labels: string[] = issue?.labels || [];
 
   const repoFullName = repo?.fullName || 'Open Source Project';
+  const prNumStr = pr?.githubNumber ? `PR #${pr.githubNumber}` : 'Pull Request';
+  const issueNumStr = issue?.githubNumber ? `Issue #${issue.githubNumber}` : 'Linked Issue';
+
+  // Run pure diff analyzer (DIFF WINS OVER PR TITLE!)
+  const diffAnalysis = analyzePullRequestDiff(
+    diffData || null,
+    prTitle,
+    pr?.githubNumber || 0,
+    repoFullName,
+    issue?.title || null
+  );
 
   // 1. Problem
   const problem = body.trim().length > 20
-    ? `The ${repoFullName} repository encountered an issue where ${body.slice(0, 280).trim()}${body.length > 280 ? '...' : ''}`
-    : `The contribution addresses an open issue in ${repoFullName}: "${title}".`;
+    ? `The ${repoFullName} repository encountered an issue: ${body.slice(0, 250).trim()}${body.length > 250 ? '...' : ''}`
+    : `Addressing ${issue ? `issue "${issue.title}"` : `PR "${prTitle}"`} in ${repoFullName}.`;
 
-  // 2. Investigation (using mandatory nuanced phrasing)
-  const investigation = `Based on the issue description, PR discussion, and implementation details in ${repoFullName}, the contribution indicates an investigation into ${title.toLowerCase()}. The code modifications suggest tracing root execution paths, validating state boundaries, and ensuring expected behavior across ${lang} runtime components.`;
+  // 2. Investigation
+  const investigation = `Based on PR discussion and implementation diffs in ${repoFullName}, the contribution modifies execution paths in ${lang} runtime components.`;
 
   // 3. Approach
   const approach = contribution.approach && contribution.approach.trim().length > 10
     ? contribution.approach.trim()
-    : `The implementation updates ${repoFullName} by introducing targeted fixes in resolving PR #${pr?.githubNumber || 'merged'}. The change modifies ${contribution.filesChanged || 1} file(s) (+${contribution.linesAdded || 0} / -${contribution.linesDeleted || 0} lines) to address the underlying root cause.`;
+    : diffAnalysis.whatChanged.map((w) => w.statement).join(' ') || `Modifies ${contribution.filesChanged || 1} file(s) (+${contribution.linesAdded || 0} / -${contribution.linesDeleted || 0} lines) in ${prNumStr}.`;
 
-  // 4. Techniques
-  const techniques = extractEvidenceBasedTechniques(
+  // 4. Techniques (combining diff techniques with verified tags)
+  const baseTechniques = extractEvidenceBasedTechniques(
     title,
     body,
     labels,
@@ -105,40 +140,41 @@ export function synthesizeEvidenceAnalysis(contribution: any): CaseStudyAnalysis
     eco,
     contribution.filesChanged || 1
   );
+  const combinedTechniques = Array.from(new Set([...diffAnalysis.techniqueNames, ...baseTechniques]));
 
   // 5. Implementation commits / changes
   const implementation = [
     {
       commitSha: pr?.githubNumber ? `PR #${pr.githubNumber}` : undefined,
-      title: `Resolving Pull Request: ${prTitle}`,
+      title: `${prTitle}`,
       url: pr?.url || repo?.url || '',
-      description: `Merged by ${pr?.mergedBy || 'maintainer'} into ${repoFullName}`,
+      description: `Merged into ${repoFullName}`,
     },
   ];
 
   // 6. Evidence Checklist
   const evidence = [
-    {
+    ...(issue ? [{
       type: 'Issue',
-      label: `Issue #${issue?.githubNumber || 'Verified'}: ${title}`,
-      url: issue?.url || repo?.url || '',
+      label: `${issueNumStr}: ${issue.title}`,
+      url: issue.url || repo?.url || '',
       verified: true,
-    },
+    }] : []),
     {
       type: 'Pull Request',
-      label: `PR #${pr?.githubNumber || 'Merged'}: ${prTitle}`,
+      label: `${prNumStr}: ${prTitle}`,
       url: pr?.url || repo?.url || '',
       verified: true,
     },
     {
       type: 'Merge Status',
-      label: `Merged by ${pr?.mergedBy || 'Maintainer'}`,
+      label: pr?.mergedBy ? `Merged by @${pr.mergedBy}` : 'Merged into repository',
       url: pr?.url || repo?.url || '',
       verified: true,
     },
     {
       type: 'Files',
-      label: `${contribution.filesChanged || 1} file(s) changed (+${contribution.linesAdded || 0} / -${contribution.linesDeleted || 0})`,
+      label: `${contribution.filesChanged || (diffData?.totalFiles ?? 1)} file(s) changed (+${contribution.linesAdded || (diffData?.totalAdditions ?? 0)} / -${contribution.linesDeleted || (diffData?.totalDeletions ?? 0)})`,
       url: pr?.url || repo?.url || '',
       verified: true,
     },
@@ -150,18 +186,22 @@ export function synthesizeEvidenceAnalysis(contribution: any): CaseStudyAnalysis
   ];
 
   // 8. Result (verified outcomes only)
-  const result = `✓ Pull Request merged into ${repoFullName}\n✓ ${contribution.filesChanged || 1} file(s) updated\n✓ Verified by Repo Rescue maintainer audit`;
+  const result = `✓ Pull Request merged into ${repoFullName}`;
 
   return CaseStudyAnalysisSchema.parse({
     problem,
     investigation,
     approach,
-    techniques,
+    whatChanged: diffAnalysis.whatChanged,
+    techniques: combinedTechniques,
+    techniqueDetails: diffAnalysis.techniques,
     implementation,
     tradeoffs,
     result,
     evidence,
     confidence: 'HIGH',
+    analysisCoverage: diffAnalysis.coverage,
+    diffPatch: diffAnalysis.diffPatch,
   });
 }
 
@@ -174,18 +214,23 @@ export async function getOrCreateCaseStudyAnalysis(contributionId: string): Prom
   });
 
   if (existing) {
+    const synthFallback = synthesizeEvidenceAnalysis({ id: contributionId, issue: null, pullRequest: null });
     return {
       id: existing.id,
       contributionId: existing.contributionId,
       problem: existing.problem,
       investigation: existing.investigation,
       approach: existing.approach,
+      whatChanged: (existing as any).whatChanged || synthFallback.whatChanged,
       techniques: existing.techniques,
+      techniqueDetails: (existing as any).techniqueDetails || synthFallback.techniqueDetails,
       implementation: (existing.implementation as any) || [],
       tradeoffs: existing.tradeoffs,
       result: existing.result,
       evidence: (existing.evidence as any) || [],
       confidence: (existing.confidence as any) || 'HIGH',
+      analysisCoverage: ((existing as any).analysisCoverage as any) || 'FULL_DIFF',
+      diffPatch: (existing as any).diffPatch || null,
       contributorLearned: existing.contributorLearned,
       modelVersion: existing.modelVersion,
       generatedAt: existing.generatedAt.toISOString(),
@@ -199,14 +244,23 @@ export async function getOrCreateCaseStudyAnalysis(contributionId: string): Prom
     where: { id: contributionId },
     include: {
       issue: { include: { repository: { include: { organization: true } } } },
-      pullRequest: true,
+      pullRequest: { include: { repository: true } },
     },
   });
 
   if (!contribution) return null;
 
-  // Synthesize evidence analysis
-  const synthesized = synthesizeEvidenceAnalysis(contribution);
+  // Try fetching real GitHub diff patch files server-side if PR info is available
+  let diffData: GitHubPullRequestDiffData | null = null;
+  const pr = contribution.pullRequest;
+  const repo = pr?.repository || contribution.issue?.repository;
+
+  if (pr && repo && repo.owner && repo.name && pr.githubNumber) {
+    diffData = await fetchGithubPullRequestFiles(repo.owner, repo.name, pr.githubNumber);
+  }
+
+  // Synthesize evidence analysis using diff data
+  const synthesized = synthesizeEvidenceAnalysis(contribution, diffData);
 
   // Save to DB
   const created = await prisma.contributionAnalysis.create({
@@ -221,7 +275,7 @@ export async function getOrCreateCaseStudyAnalysis(contributionId: string): Prom
       result: synthesized.result,
       evidence: synthesized.evidence as any,
       confidence: synthesized.confidence,
-      modelVersion: 'v1.0.0',
+      modelVersion: 'v2.0.0',
     },
   });
 
@@ -231,12 +285,16 @@ export async function getOrCreateCaseStudyAnalysis(contributionId: string): Prom
     problem: created.problem,
     investigation: created.investigation,
     approach: created.approach,
+    whatChanged: synthesized.whatChanged,
     techniques: created.techniques,
+    techniqueDetails: synthesized.techniqueDetails,
     implementation: (created.implementation as any) || [],
     tradeoffs: created.tradeoffs,
     result: created.result,
     evidence: (created.evidence as any) || [],
     confidence: (created.confidence as any) || 'HIGH',
+    analysisCoverage: synthesized.analysisCoverage,
+    diffPatch: synthesized.diffPatch,
     contributorLearned: created.contributorLearned,
     modelVersion: created.modelVersion,
     generatedAt: created.generatedAt.toISOString(),
