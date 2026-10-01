@@ -217,6 +217,17 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
           </div>
         </div>
 
+        {/* Real-time GitHub Activity Sync Status Banner */}
+        {user.contributorSyncStatus === 'RUNNING' && (
+          <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/30 text-blue-300 text-xs font-mono flex items-center justify-between gap-4 animate-pulse">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-blue-400 animate-spin" />
+              <span>Analyzing your GitHub merged pull requests & verifying open-source contributions...</span>
+            </div>
+            <span className="text-[11px] text-blue-400 font-bold">Sync Active</span>
+          </div>
+        )}
+
         {/* TOP-LEVEL CONTRIBUTION OVERVIEW (Database-backed real metrics) */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/70 backdrop-blur-xl space-y-1 font-mono">

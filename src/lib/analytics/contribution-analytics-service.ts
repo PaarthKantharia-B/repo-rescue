@@ -96,6 +96,8 @@ export interface ContributionAnalyticsData {
     repositoriesCount: number;
     avgRrRating: number;
     avgDifficulty: number;
+    contributorSyncStatus?: string;
+    lastSyncedAt?: string | null;
   };
   timeSeries: TimeSeriesPoint[];
   contributionTypes: ContributionDnaCategory[];
@@ -266,6 +268,8 @@ export async function getContributionAnalytics(username: string): Promise<Contri
         repositoriesCount: 0,
         avgRrRating: 0,
         avgDifficulty: 0,
+        contributorSyncStatus: user.contributorSyncStatus,
+        lastSyncedAt: user.lastSyncedAt ? user.lastSyncedAt.toISOString() : null,
       },
       timeSeries: [],
       contributionTypes: [],
@@ -622,6 +626,8 @@ export async function getContributionAnalytics(username: string): Promise<Contri
       repositoriesCount: repoMap.size,
       avgRrRating: avgRrRating,
       avgDifficulty,
+      contributorSyncStatus: user.contributorSyncStatus,
+      lastSyncedAt: user.lastSyncedAt ? user.lastSyncedAt.toISOString() : null,
     },
     timeSeries,
     contributionTypes,

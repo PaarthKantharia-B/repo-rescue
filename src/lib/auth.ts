@@ -3,6 +3,8 @@ import GithubProvider from 'next-auth/providers/github';
 import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import { prisma } from '@/lib/prisma';
 
+import { syncContributorGithubActivity } from '@/lib/contributors/sync-service';
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
@@ -27,6 +29,16 @@ export const authOptions: NextAuthOptions = {
       },
     }),
   ],
+  events: {
+    async signIn({ user }) {
+      if (user && user.id) {
+        // Fire-and-forget background contributor sync without blocking OAuth login response
+        syncContributorGithubActivity(user.id).catch((err) => {
+          console.error('[NextAuth events.signIn] Background contributor sync error:', err);
+        });
+      }
+    },
+  },
   callbacks: {
     async jwt({ token, user, profile }) {
       if (profile) {

@@ -34,6 +34,13 @@ enum ContributionStatus {
   REJECTED
 }
 
+enum ContributorSyncStatus {
+  IDLE
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
 enum LedgerTransactionType {
   ISSUE_SOLVED
   BONUS
@@ -42,23 +49,29 @@ enum LedgerTransactionType {
 }
 
 model User {
-  id             String         @id @default(cuid())
-  name           String?
-  email          String?        @unique
-  emailVerified  DateTime?
-  image          String?
-  githubUsername String?        @unique
-  bio            String?
-  location       String?
-  company        String?
-  websiteUrl     String?
-  role           Role           @default(CONTRIBUTOR)
+  id                    String                @id @default(cuid())
+  name                  String?
+  email                 String?               @unique
+  emailVerified         DateTime?
+  image                 String?
+  githubUsername        String?               @unique
+  bio                   String?
+  location              String?
+  company               String?
+  websiteUrl            String?
+  role                  Role                  @default(CONTRIBUTOR)
   
-  totalPoints    Float          @default(0.0)
-  rrRating       Int            @default(1200)
+  totalPoints           Float                 @default(0.0)
+  rrRating              Int                   @default(1200)
 
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  contributorSyncStatus ContributorSyncStatus @default(IDLE)
+  lastSyncedAt          DateTime?
+  syncStartedAt         DateTime?
+  syncCompletedAt       DateTime?
+  syncError             String?               @db.Text
+
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
 
   accounts       Account[]
   sessions       Session[]
