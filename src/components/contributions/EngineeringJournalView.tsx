@@ -211,8 +211,6 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                 <span className="font-bold text-slate-100 text-sm">@{user.githubUsername}</span>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-amber-400 font-bold">{user.totalPoints.toLocaleString()} RR Points</span>
-                  <span className="text-slate-600">•</span>
-                  <span className="text-blue-400 font-semibold">Rating {user.rrRating}</span>
                 </div>
               </div>
             </div>
@@ -220,7 +218,7 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
         </div>
 
         {/* TOP-LEVEL CONTRIBUTION OVERVIEW (Database-backed real metrics) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/70 backdrop-blur-xl space-y-1 font-mono">
             <div className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Verified Work</div>
             <div className="text-2xl font-extrabold text-slate-100">{user.verifiedContributionsCount}</div>
@@ -246,12 +244,6 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
             <div className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Engineering Areas</div>
             <div className="text-2xl font-extrabold text-purple-400">{data.technicalAreas.length}</div>
             <div className="text-[10px] text-slate-500">Domain Focus</div>
-          </div>
-
-          <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/70 backdrop-blur-xl space-y-1 font-mono">
-            <div className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Avg Rating</div>
-            <div className="text-2xl font-extrabold text-cyan-300">{user.avgRrRating.toFixed(1)}</div>
-            <div className="text-[10px] text-slate-500">Quality Score</div>
           </div>
 
           <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/70 backdrop-blur-xl space-y-1 font-mono">

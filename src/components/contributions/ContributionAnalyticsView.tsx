@@ -496,12 +496,6 @@ export const ContributionAnalyticsView: React.FC<Props> = ({ data }) => {
           </div>
 
           <div className="p-5 rounded-2xl border border-slate-800 bg-slate-950/90 shadow-xl backdrop-blur-xl space-y-1">
-            <div className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Avg RR Rating</div>
-            <div className="text-3xl font-black text-purple-400">{user.avgRrRating > 0 ? user.avgRrRating.toFixed(1) : 'N/A'}</div>
-            <div className="text-[10px] text-slate-500">Score Out of 10.0</div>
-          </div>
-
-          <div className="p-5 rounded-2xl border border-slate-800 bg-slate-950/90 shadow-xl backdrop-blur-xl space-y-1">
             <div className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Avg Difficulty</div>
             <div className="text-3xl font-black text-rose-400">{user.avgDifficulty > 0 ? user.avgDifficulty.toFixed(1) : 'N/A'}</div>
             <div className="text-[10px] text-slate-500">Complexity Index</div>
@@ -559,7 +553,6 @@ export const ContributionAnalyticsView: React.FC<Props> = ({ data }) => {
                   <option value="points">RR Points</option>
                   <option value="issuesSolved">Issues Solved</option>
                   <option value="prsMerged">PRs Merged</option>
-                  <option value="avgRating">RR Rating</option>
                 </select>
 
                 {/* Time Range Pills */}
@@ -652,10 +645,10 @@ export const ContributionAnalyticsView: React.FC<Props> = ({ data }) => {
             </div>
           </div>
 
-          {/* 4 & 5. DIFFICULTY DISTRIBUTION & QUALITY ANALYTICS */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            {/* Difficulty Distribution (7 Cols) */}
-            <div className="lg:col-span-7 rounded-3xl border border-slate-800 bg-slate-950/90 p-6 md:p-8 backdrop-blur-xl space-y-6 shadow-2xl">
+          {/* 4. DIFFICULTY DISTRIBUTION */}
+          <div className="grid grid-cols-1 gap-8">
+            {/* Difficulty Distribution */}
+            <div className="rounded-3xl border border-slate-800 bg-slate-950/90 p-6 md:p-8 backdrop-blur-xl space-y-6 shadow-2xl">
               <div>
                 <h2 className="text-lg font-mono font-bold text-slate-100 flex items-center gap-2">
                   <Sliders className="w-5 h-5 text-rose-400" />
@@ -711,48 +704,6 @@ export const ContributionAnalyticsView: React.FC<Props> = ({ data }) => {
                   </div>
                 </div>
               )}
-            </div>
-
-            {/* Quality Analytics & RR Rating (5 Cols) */}
-            <div className="lg:col-span-5 rounded-3xl border border-slate-800 bg-slate-950/90 p-6 md:p-8 backdrop-blur-xl space-y-6 shadow-2xl">
-              <div>
-                <h2 className="text-lg font-mono font-bold text-slate-100 flex items-center gap-2">
-                  <Trophy className="w-5 h-5 text-amber-400" />
-                  Contribution Quality
-                </h2>
-                <p className="text-xs text-slate-400 font-sans mt-1">
-                  Derived from codebase complexity, testing rigor, and maintainer audit
-                </p>
-              </div>
-
-              <div className="space-y-4 font-mono text-xs">
-                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between">
-                  <div>
-                    <div className="text-[10px] text-amber-400 uppercase font-bold">Average RR Rating</div>
-                    <div className="text-3xl font-black text-amber-300 mt-1">{qualityAnalytics.avgRating.toFixed(1)}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-[10px] text-slate-400">Highly-Rated (≥7.5)</div>
-                    <div className="text-xl font-bold text-slate-200 mt-1">{qualityAnalytics.highlyRatedCount} contributions</div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 text-center">
-                  <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
-                    <div className="text-slate-500 text-[10px]">Median Rating</div>
-                    <div className="text-slate-200 font-bold text-sm mt-0.5">{qualityAnalytics.medianRating.toFixed(1)}</div>
-                  </div>
-                  <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
-                    <div className="text-slate-500 text-[10px]">Highest Rating</div>
-                    <div className="text-slate-200 font-bold text-sm mt-0.5">{qualityAnalytics.highestRating.toFixed(1)}</div>
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80 text-[11px] font-sans text-slate-400 leading-relaxed">
-                  <span className="font-bold text-slate-300 font-mono">How RR Rating Works: </span>
-                  Unlike arbitrary popularity metrics, RR Rating evaluates the technical depth, codebase scope, and audit verification of merged PRs.
-                </div>
-              </div>
             </div>
           </div>
 
@@ -1158,17 +1109,6 @@ export const ContributionAnalyticsView: React.FC<Props> = ({ data }) => {
               </div>
 
               <div className="space-y-4 font-mono text-xs">
-                <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Your Average RR Rating</span>
-                    <span className="font-bold text-emerald-400">{benchmark.userAvgRating.toFixed(1)}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-slate-900 pt-2 text-slate-500 text-[11px]">
-                    <span>Repo Rescue Community Average</span>
-                    <span>{benchmark.globalAvgRating.toFixed(1)}</span>
-                  </div>
-                </div>
-
                 <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-2">
                   <div className="flex justify-between">
                     <span className="text-slate-400">Your Average Difficulty</span>
