@@ -49,7 +49,8 @@ async function fetchUserMergedPrsFromGithub(
     headers['Authorization'] = `token ${process.env.GITHUB_TOKEN}`;
   }
 
-  const query = encodeURIComponent(`type:pr author:${githubUsername} is:merged`);
+  // Broad historical discovery across ALL PR statuses (open, closed, merged, draft)
+  const query = encodeURIComponent(`type:pr author:${githubUsername}`);
   const url = `https://api.github.com/search/issues?q=${query}&sort=created&order=desc&per_page=${perPage}&page=${page}`;
 
   const res = await fetch(url, { headers });
@@ -275,131 +276,171 @@ export async function syncContributorGithubActivity(
           continue;
         }
 
-        // Resolve Linked Issue (Phase 5)
+        const isMerged = Boolean(prItem.pull_request?.merged_at);
+        const prStatus = isMerged ? 'MERGED' : prItem.state === 'closed' ? 'CLOSED' : 'OPEN';
+
+        // Resolve Linked Issue if closing keyword reference present (e.g. Fixes #123)
         const linkedNums = extractLinkedIssueNumbers(prItem.title, prItem.body || '');
-        if (linkedNums.length === 0) {
-          // No linked issue reference (e.g. Fixes #123) in PR
-          continue;
+        let matchedIssue = null;
+
+        if (linkedNums.length > 0) {
+          matchedIssue = await withPrismaRetry(() =>
+            prisma.issue.findFirst({
+              where: {
+                repositoryId: repo.id,
+                githubNumber: { in: linkedNums },
+              },
+            })
+          );
+
+          if (!matchedIssue) {
+            // Attempt to register referenced issue from GitHub API
+            const issueMeta = await fetchGithubIssueMetadata(owner, repoName, linkedNums[0]);
+            if (issueMeta) {
+              const rawLabels = (issueMeta.labels || []).map((l: any) => (typeof l === 'string' ? l : l.name)).filter(Boolean);
+              const evaluation = evaluateV2FactorsWithEvidence({
+                title: issueMeta.title,
+                body: issueMeta.body || '',
+                labels: rawLabels,
+                repoName: repo.name,
+                repoStars: repo.starsCount,
+                repoType: repo.repoType,
+              });
+
+              const issueNow = new Date();
+              matchedIssue = await withPrismaRetry(() =>
+                prisma.issue.create({
+                  data: {
+                    githubId: BigInt(issueMeta.id),
+                    githubNumber: issueMeta.number,
+                    repositoryId: repo.id,
+                    title: issueMeta.title,
+                    body: issueMeta.body || '',
+                    url: issueMeta.html_url || `https://github.com/${repoFullName}/issues/${issueMeta.number}`,
+                    status: issueMeta.state === 'closed' ? 'CLOSED' : 'OPEN',
+                    labels: rawLabels,
+                    language: repo.language || 'TypeScript',
+                    ecosystem: repo.ecosystem || 'Node.js',
+                    authorUsername: issueMeta.user?.login || 'ghost',
+                    rrDifficulty: evaluation.compositeScore,
+                    githubState: issueMeta.state || 'open',
+                    lastSyncedAt: issueNow,
+                  },
+                })
+              );
+
+              await withPrismaRetry(() =>
+                prisma.issueScore.create({
+                  data: {
+                    issueId: matchedIssue!.id,
+                    scoringVersion: SCORING_VERSION_V2_3,
+                    calculatedAt: issueNow,
+                    technicalDifficulty: evaluation.factors.technicalComplexity,
+                    codebaseComplexity: evaluation.factors.changeScope,
+                    issueScope: evaluation.factors.domainSpecialization,
+                    domainKnowledge: evaluation.factors.testingVerificationEffort,
+                    expectedImpact: evaluation.factors.problemAmbiguity,
+                    testingComplexity: evaluation.factors.testingVerificationEffort,
+                    issueClarity: evaluation.factors.problemAmbiguity,
+                    maintainerActivity: 5.0,
+                    compositeScore: evaluation.compositeScore,
+                    reasoning: evaluation.overallReasoning,
+                  },
+                })
+              );
+            }
+          }
         }
 
-        let matchedIssue = await withPrismaRetry(() =>
-          prisma.issue.findFirst({
-            where: {
+        // Persist/Upsert PullRequest lifecycle record for ALL discovered PRs
+        const mergedAtDate = isMerged && (prItem.pull_request?.merged_at || prItem.closed_at)
+          ? new Date(prItem.pull_request?.merged_at || prItem.closed_at!)
+          : null;
+        const closedAtDate = prItem.closed_at ? new Date(prItem.closed_at) : null;
+        const openedAtDate = (prItem as any).created_at ? new Date((prItem as any).created_at) : now;
+
+        await withPrismaRetry(() =>
+          prisma.pullRequest.upsert({
+            where: { githubId: BigInt(prItem.id) },
+            create: {
+              id: `pr-${prItem.id}`,
+              githubId: BigInt(prItem.id),
+              githubNumber: prItem.number,
               repositoryId: repo.id,
-              githubNumber: { in: linkedNums },
+              userId: user.id,
+              issueId: matchedIssue?.id || null,
+              title: prItem.title,
+              url: prItem.html_url || `https://github.com/${repoFullName}/pull/${prItem.number}`,
+              status: prStatus as any,
+              githubState: prItem.state || (isMerged ? 'closed' : 'open'),
+              isMerged: isMerged,
+              openedAt: openedAtDate,
+              closedAt: closedAtDate,
+              mergedAt: mergedAtDate,
+              lastSyncedAt: now,
+              latestActivityAt: now,
+            },
+            update: {
+              title: prItem.title,
+              status: prStatus as any,
+              githubState: prItem.state || (isMerged ? 'closed' : 'open'),
+              isMerged: isMerged,
+              closedAt: closedAtDate,
+              mergedAt: mergedAtDate,
+              lastSyncedAt: now,
+              latestActivityAt: now,
+              ...(matchedIssue ? { issueId: matchedIssue.id } : {}),
             },
           })
         );
 
-        if (!matchedIssue) {
-          // Attempt to register referenced issue from GitHub API
-          const issueMeta = await fetchGithubIssueMetadata(owner, repoName, linkedNums[0]);
-          if (issueMeta) {
-            const rawLabels = (issueMeta.labels || []).map((l: any) => (typeof l === 'string' ? l : l.name)).filter(Boolean);
-            const evaluation = evaluateV2FactorsWithEvidence({
-              title: issueMeta.title,
-              body: issueMeta.body || '',
-              labels: rawLabels,
-              repoName: repo.name,
-              repoStars: repo.starsCount,
-              repoType: repo.repoType,
-            });
-
-            const issueNow = new Date();
-            matchedIssue = await withPrismaRetry(() =>
-              prisma.issue.create({
-                data: {
-                  githubId: BigInt(issueMeta.id),
-                  githubNumber: issueMeta.number,
-                  repositoryId: repo.id,
-                  title: issueMeta.title,
-                  body: issueMeta.body || '',
-                  url: issueMeta.html_url || `https://github.com/${repoFullName}/issues/${issueMeta.number}`,
-                  status: issueMeta.state === 'closed' ? 'CLOSED' : 'OPEN',
-                  labels: rawLabels,
-                  language: repo.language || 'TypeScript',
-                  ecosystem: repo.ecosystem || 'Node.js',
-                  authorUsername: issueMeta.user?.login || 'ghost',
-                  rrDifficulty: evaluation.compositeScore,
-                  githubState: issueMeta.state || 'open',
-                  lastSyncedAt: issueNow,
-                },
-              })
-            );
-
-            await withPrismaRetry(() =>
-              prisma.issueScore.create({
-                data: {
-                  issueId: matchedIssue!.id,
-                  scoringVersion: SCORING_VERSION_V2_3,
-                  calculatedAt: issueNow,
-                  technicalDifficulty: evaluation.factors.technicalComplexity,
-                  codebaseComplexity: evaluation.factors.changeScope,
-                  issueScope: evaluation.factors.domainSpecialization,
-                  domainKnowledge: evaluation.factors.testingVerificationEffort,
-                  expectedImpact: evaluation.factors.problemAmbiguity,
-                  testingComplexity: evaluation.factors.testingVerificationEffort,
-                  issueClarity: evaluation.factors.problemAmbiguity,
-                  maintainerActivity: 5.0,
-                  compositeScore: evaluation.compositeScore,
-                  reasoning: evaluation.overallReasoning,
-                },
-              })
-            );
-          }
-        }
-
-        if (!matchedIssue) {
-          errors.push(`Referenced issue #${linkedNums[0]} could not be indexed for repo '${repoFullName}'.`);
-          continue;
-        }
-
-        // Build GitHubPRPayload for existing authoritative verification engine (Phase 6)
-        const mergedAtStr = prItem.pull_request?.merged_at || prItem.closed_at || new Date().toISOString();
-        const verificationPayload: GitHubPRPayload = {
-          action: 'closed',
-          number: prItem.number,
-          pull_request: {
-            id: prItem.id,
+        // Authoritative Verification ONLY for Merged PRs with indexed issue
+        if (isMerged && matchedIssue) {
+          const verificationPayload: GitHubPRPayload = {
+            action: 'closed',
             number: prItem.number,
-            title: prItem.title,
-            body: prItem.body || '',
-            merged: true,
-            merged_at: mergedAtStr,
-            merged_by: { login: 'maintainer-audit' },
-            user: {
-              id: 0,
-              login: githubUsername,
-            },
-            base: {
-              repo: {
-                id: Number(repo.githubId),
-                name: repo.name,
-                full_name: repo.fullName,
-                owner: { login: repo.owner },
+            pull_request: {
+              id: prItem.id,
+              number: prItem.number,
+              title: prItem.title,
+              body: prItem.body || '',
+              merged: true,
+              merged_at: mergedAtDate ? mergedAtDate.toISOString() : now.toISOString(),
+              merged_by: { login: 'maintainer-audit' },
+              user: {
+                id: 0,
+                login: githubUsername,
+              },
+              base: {
+                repo: {
+                  id: Number(repo.githubId),
+                  name: repo.name,
+                  full_name: repo.fullName,
+                  owner: { login: repo.owner },
+                },
               },
             },
-          },
-        };
+          };
 
-        const result = await verifyAndAwardContribution(verificationPayload);
+          const result = await verifyAndAwardContribution(verificationPayload);
 
-        if (result.status === 'VERIFIED') {
-          verifiedContributionsCount++;
-          pointsAwarded += result.pointsAwarded;
+          if (result.status === 'VERIFIED') {
+            verifiedContributionsCount++;
+            pointsAwarded += result.pointsAwarded;
 
-          // Queue AI case study synthesis asynchronously without blocking contribution verification (Phase 16)
-          if (result.contributionId) {
-            try {
-              await getOrCreateCaseStudyAnalysis(result.contributionId);
-            } catch (aiErr) {
-              console.warn(`[ContributorSync] Asynchronous AI case study generation error for contribution ${result.contributionId}:`, aiErr);
+            // Queue AI case study synthesis asynchronously without blocking contribution verification (Phase 16)
+            if (result.contributionId) {
+              try {
+                await getOrCreateCaseStudyAnalysis(result.contributionId);
+              } catch (aiErr) {
+                console.warn(`[ContributorSync] Asynchronous AI case study generation error for contribution ${result.contributionId}:`, aiErr);
+              }
             }
+          } else if (result.status === 'ALREADY_PROCESSED') {
+            // Idempotent hit — already awarded safely (Phase 9)
+          } else if (result.status === 'REJECTED') {
+            errors.push(`PR #${prItem.number} rejected: ${result.reason}`);
           }
-        } else if (result.status === 'ALREADY_PROCESSED') {
-          // Idempotent hit — already awarded safely (Phase 9)
-        } else if (result.status === 'REJECTED') {
-          errors.push(`PR #${prItem.number} rejected: ${result.reason}`);
         }
       } catch (prErr: any) {
         // Individual PR failure resilience (Phase 13)

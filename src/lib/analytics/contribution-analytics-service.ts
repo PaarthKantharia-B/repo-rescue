@@ -230,6 +230,23 @@ export async function getContributionAnalytics(username: string): Promise<Contri
   const user = await prisma.user.findFirst({
     where: { githubUsername: { mode: 'insensitive', equals: username } },
     include: {
+      pullRequests: {
+        include: {
+          repository: { include: { organization: true } },
+          issue: true,
+          contribution: {
+            include: {
+              analysis: true,
+            },
+          },
+        },
+        orderBy: [
+          { mergedAt: 'desc' },
+          { closedAt: 'desc' },
+          { openedAt: 'desc' },
+          { createdAt: 'desc' },
+        ],
+      },
       contributions: {
         where: { status: 'MERGED_AND_AUDITED' },
         include: {
@@ -246,12 +263,215 @@ export async function getContributionAnalytics(username: string): Promise<Contri
   if (!user) return null;
 
   const rawContribs = user.contributions;
+  const rawPullRequests = user.pullRequests || [];
   const ledgerEntries = user.ledgerEntries;
 
-  // 0. Base Metrics
-  const totalVerifiedCount = rawContribs.length;
+  // 1. Build Comprehensive History Items from PullRequests and Contributions
+  const historyMap = new Map<string, ContributionHistoryItem>();
 
-  if (totalVerifiedCount === 0 && ledgerEntries.length === 0) {
+  // Process all PullRequests first
+  rawPullRequests.forEach((pr) => {
+    const repo = pr.repository;
+    const issue = pr.issue;
+    const contrib = pr.contribution;
+    const isVerifiedMerged = Boolean(contrib && contrib.status === 'MERGED_AND_AUDITED' && pr.isMerged);
+
+    const lang = contrib?.language || issue?.language || repo.language || 'TypeScript';
+    const eco = issue?.ecosystem || repo.ecosystem || 'Node.js';
+    const repoType = repo.repoType || 'OPEN_SOURCE';
+
+    const titleText = issue?.title || pr.title;
+    const bodyText = issue?.body || null;
+    const labelsList = issue?.labels || [];
+
+    const category = classifyContributionType(titleText, bodyText, labelsList);
+    const area = classifyTechnicalArea(lang, eco, repoType, titleText);
+
+    const prStatusStr = pr.isMerged
+      ? 'MERGED'
+      : pr.status === 'CLOSED' || pr.githubState === 'closed'
+      ? 'CLOSED'
+      : 'OPEN';
+
+    const isAssigned = contrib?.wasAssigned || (issue?.assignees && user.githubUsername ? issue.assignees.map(a => a.toLowerCase()).includes(user.githubUsername.toLowerCase()) : false);
+    const isPartnerOrg = contrib?.isPartner !== undefined ? contrib.isPartner : (repo.organizationId !== null);
+
+    const techniques = isVerifiedMerged && contrib?.analysis?.techniques && contrib.analysis.techniques.length > 0
+      ? contrib.analysis.techniques
+      : isVerifiedMerged && issue
+      ? extractEvidenceBasedTechniques(titleText, bodyText, labelsList, lang, eco, contrib?.filesChanged || 1)
+      : [];
+
+    let caseStudyData: CaseStudyData | null = null;
+    if (isVerifiedMerged && contrib) {
+      const synthAnalysis = synthesizeEvidenceAnalysis(contrib);
+      caseStudyData = contrib.analysis ? {
+        id: contrib.analysis.id,
+        contributionId: contrib.analysis.contributionId,
+        problem: contrib.analysis.problem,
+        investigation: contrib.analysis.investigation,
+        approach: contrib.analysis.approach,
+        techniques: contrib.analysis.techniques,
+        implementation: (contrib.analysis.implementation as any) || synthAnalysis.implementation,
+        tradeoffs: contrib.analysis.tradeoffs,
+        result: contrib.analysis.result,
+        evidence: (contrib.analysis.evidence as any) || synthAnalysis.evidence,
+        confidence: (contrib.analysis.confidence as any) || 'HIGH',
+        contributorLearned: contrib.analysis.contributorLearned,
+        modelVersion: contrib.analysis.modelVersion,
+        generatedAt: contrib.analysis.generatedAt.toISOString(),
+        contributorEdited: contrib.analysis.contributorEdited,
+        contributorEditedAt: contrib.analysis.contributorEditedAt ? contrib.analysis.contributorEditedAt.toISOString() : null,
+      } : {
+        id: `synth-${contrib.id}`,
+        contributionId: contrib.id,
+        problem: synthAnalysis.problem,
+        investigation: synthAnalysis.investigation,
+        approach: synthAnalysis.approach,
+        techniques: synthAnalysis.techniques,
+        implementation: synthAnalysis.implementation,
+        tradeoffs: synthAnalysis.tradeoffs,
+        result: synthAnalysis.result,
+        evidence: synthAnalysis.evidence,
+        confidence: synthAnalysis.confidence,
+        contributorLearned: null,
+        modelVersion: 'v1.0.0',
+        generatedAt: new Date(contrib.verifiedAt).toISOString(),
+        contributorEdited: false,
+        contributorEditedAt: null,
+      };
+    }
+
+    const itemKey = contrib ? contrib.id : pr.id;
+    const rawDate = pr.mergedAt || contrib?.verifiedAt || pr.closedAt || pr.openedAt || pr.createdAt || new Date();
+
+    historyMap.set(itemKey, {
+      id: itemKey,
+      issueTitle: titleText,
+      issueUrl: issue ? `/issues/${issue.id}` : pr.url,
+      issueBody: bodyText,
+      issueId: issue?.id || '',
+      repoFullName: repo.fullName,
+      repoUrl: repo.url,
+      orgName: repo.organization?.name || repo.organization?.login || repo.owner || 'Open Source',
+      orgAvatar: repo.organization?.avatarUrl ?? null,
+      prNumber: pr.githubNumber,
+      prUrl: pr.url,
+      prStatus: prStatusStr,
+      rrDifficulty: isVerifiedMerged && issue ? issue.rrDifficulty : 0,
+      rrPoints: isVerifiedMerged && contrib ? contrib.rrPoints : 0,
+      mergedAt: rawDate ? new Date(rawDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recent',
+      verifiedAtRaw: new Date(rawDate),
+      status: contrib?.status || prStatusStr,
+      approach: contrib?.approach ?? null,
+      wasAssigned: isAssigned,
+      isPartner: isPartnerOrg,
+      linesAdded: contrib?.linesAdded || 0,
+      linesDeleted: contrib?.linesDeleted || 0,
+      filesChanged: contrib?.filesChanged || 0,
+      language: lang,
+      category,
+      area,
+      techniques,
+      analysis: caseStudyData,
+    });
+  });
+
+  // Fallback append for any legacy contributions not linked to a pullRequest
+  rawContribs.forEach((c) => {
+    if (!historyMap.has(c.id)) {
+      const issue = c.issue;
+      const repo = issue.repository;
+      const pr = c.pullRequest;
+      const lang = c.language || issue.language || repo.language || 'TypeScript';
+      const eco = issue.ecosystem || repo.ecosystem || 'Node.js';
+      const repoType = repo.repoType || 'OPEN_SOURCE';
+
+      const category = classifyContributionType(issue.title, issue.body, issue.labels);
+      const area = classifyTechnicalArea(lang, eco, repoType, issue.title);
+
+      const techniques = c.analysis?.techniques && c.analysis.techniques.length > 0
+        ? c.analysis.techniques
+        : extractEvidenceBasedTechniques(issue.title, issue.body, issue.labels, lang, eco, c.filesChanged || 1);
+
+      const synthAnalysis = synthesizeEvidenceAnalysis(c);
+      const caseStudyData: CaseStudyData = c.analysis ? {
+        id: c.analysis.id,
+        contributionId: c.analysis.contributionId,
+        problem: c.analysis.problem,
+        investigation: c.analysis.investigation,
+        approach: c.analysis.approach,
+        techniques: c.analysis.techniques,
+        implementation: (c.analysis.implementation as any) || synthAnalysis.implementation,
+        tradeoffs: c.analysis.tradeoffs,
+        result: c.analysis.result,
+        evidence: (c.analysis.evidence as any) || synthAnalysis.evidence,
+        confidence: (c.analysis.confidence as any) || 'HIGH',
+        contributorLearned: c.analysis.contributorLearned,
+        modelVersion: c.analysis.modelVersion,
+        generatedAt: c.analysis.generatedAt.toISOString(),
+        contributorEdited: c.analysis.contributorEdited,
+        contributorEditedAt: c.analysis.contributorEditedAt ? c.analysis.contributorEditedAt.toISOString() : null,
+      } : {
+        id: `synth-${c.id}`,
+        contributionId: c.id,
+        problem: synthAnalysis.problem,
+        investigation: synthAnalysis.investigation,
+        approach: synthAnalysis.approach,
+        techniques: synthAnalysis.techniques,
+        implementation: synthAnalysis.implementation,
+        tradeoffs: synthAnalysis.tradeoffs,
+        result: synthAnalysis.result,
+        evidence: synthAnalysis.evidence,
+        confidence: synthAnalysis.confidence,
+        contributorLearned: null,
+        modelVersion: 'v1.0.0',
+        generatedAt: new Date(c.verifiedAt).toISOString(),
+        contributorEdited: false,
+        contributorEditedAt: null,
+      };
+
+      historyMap.set(c.id, {
+        id: c.id,
+        issueTitle: issue.title,
+        issueUrl: `/issues/${issue.id}`,
+        issueBody: issue.body,
+        issueId: issue.id,
+        repoFullName: repo.fullName,
+        repoUrl: repo.url,
+        orgName: repo.organization?.name || repo.organization?.login || repo.owner || 'Open Source',
+        orgAvatar: repo.organization?.avatarUrl ?? null,
+        prNumber: pr?.githubNumber ?? 0,
+        prUrl: pr?.url ?? '',
+        prStatus: pr?.status || (pr?.isMerged ? 'MERGED' : 'OPEN'),
+        rrDifficulty: issue.rrDifficulty,
+        rrPoints: c.rrPoints,
+        mergedAt: new Date(c.verifiedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        verifiedAtRaw: c.verifiedAt,
+        status: c.status,
+        approach: c.approach ?? null,
+        wasAssigned: c.wasAssigned,
+        isPartner: c.isPartner,
+        linesAdded: c.linesAdded,
+        linesDeleted: c.linesDeleted,
+        filesChanged: c.filesChanged,
+        language: lang,
+        category,
+        area,
+        techniques,
+        analysis: caseStudyData,
+      });
+    }
+  });
+
+  const history = Array.from(historyMap.values()).sort(
+    (a, b) => b.verifiedAtRaw.getTime() - a.verifiedAtRaw.getTime()
+  );
+
+  const verifiedMergedHistory = history.filter((h) => h.prStatus === 'MERGED' && h.rrPoints > 0);
+  const totalVerifiedCount = verifiedMergedHistory.length;
+
+  if (history.length === 0 && ledgerEntries.length === 0) {
     return {
       user: {
         id: user.id,
@@ -318,95 +538,6 @@ export async function getContributionAnalytics(username: string): Promise<Contri
       hasData: false,
     };
   }
-
-  // 1. Process Raw Contributions into Structured History Items
-  const history: ContributionHistoryItem[] = rawContribs.map((c) => {
-    const issue = c.issue;
-    const repo = issue.repository;
-    const pr = c.pullRequest;
-    const lang = c.language || issue.language || repo.language || 'TypeScript';
-    const eco = issue.ecosystem || repo.ecosystem || 'Node.js';
-    const repoType = repo.repoType || 'OPEN_SOURCE';
-
-    const category = classifyContributionType(issue.title, issue.body, issue.labels);
-    const area = classifyTechnicalArea(lang, eco, repoType, issue.title);
-
-    const isAssigned = c.wasAssigned || (issue.assignees && user.githubUsername ? issue.assignees.map(a => a.toLowerCase()).includes(user.githubUsername.toLowerCase()) : false);
-    const isPartnerOrg = c.isPartner !== undefined ? c.isPartner : (repo.organizationId !== null);
-
-    const techniques = c.analysis?.techniques && c.analysis.techniques.length > 0
-      ? c.analysis.techniques
-      : extractEvidenceBasedTechniques(issue.title, issue.body, issue.labels, lang, eco, c.filesChanged || 1);
-
-    const synthAnalysis = synthesizeEvidenceAnalysis(c);
-
-    const caseStudyData: CaseStudyData = c.analysis ? {
-      id: c.analysis.id,
-      contributionId: c.analysis.contributionId,
-      problem: c.analysis.problem,
-      investigation: c.analysis.investigation,
-      approach: c.analysis.approach,
-      techniques: c.analysis.techniques,
-      implementation: (c.analysis.implementation as any) || synthAnalysis.implementation,
-      tradeoffs: c.analysis.tradeoffs,
-      result: c.analysis.result,
-      evidence: (c.analysis.evidence as any) || synthAnalysis.evidence,
-      confidence: (c.analysis.confidence as any) || 'HIGH',
-      contributorLearned: c.analysis.contributorLearned,
-      modelVersion: c.analysis.modelVersion,
-      generatedAt: c.analysis.generatedAt.toISOString(),
-      contributorEdited: c.analysis.contributorEdited,
-      contributorEditedAt: c.analysis.contributorEditedAt ? c.analysis.contributorEditedAt.toISOString() : null,
-    } : {
-      id: `synth-${c.id}`,
-      contributionId: c.id,
-      problem: synthAnalysis.problem,
-      investigation: synthAnalysis.investigation,
-      approach: synthAnalysis.approach,
-      techniques: synthAnalysis.techniques,
-      implementation: synthAnalysis.implementation,
-      tradeoffs: synthAnalysis.tradeoffs,
-      result: synthAnalysis.result,
-      evidence: synthAnalysis.evidence,
-      confidence: synthAnalysis.confidence,
-      contributorLearned: null,
-      modelVersion: 'v1.0.0',
-      generatedAt: new Date(c.verifiedAt).toISOString(),
-      contributorEdited: false,
-      contributorEditedAt: null,
-    };
-
-    return {
-      id: c.id,
-      issueTitle: issue.title,
-      issueUrl: `/issues/${issue.id}`,
-      issueBody: issue.body,
-      issueId: issue.id,
-      repoFullName: repo.fullName,
-      repoUrl: repo.url,
-      orgName: repo.organization?.name || repo.organization?.login || repo.owner || 'Open Source',
-      orgAvatar: repo.organization?.avatarUrl ?? null,
-      prNumber: pr?.githubNumber ?? 0,
-      prUrl: pr?.url ?? '',
-      prStatus: pr?.status || (pr?.isMerged ? 'MERGED' : 'OPEN'),
-      rrDifficulty: issue.rrDifficulty,
-      rrPoints: c.rrPoints,
-      mergedAt: new Date(c.verifiedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      verifiedAtRaw: c.verifiedAt,
-      status: c.status,
-      approach: c.approach ?? null,
-      wasAssigned: isAssigned,
-      isPartner: isPartnerOrg,
-      linesAdded: c.linesAdded > 0 ? c.linesAdded : Math.round(issue.rrDifficulty * 18 + 12),
-      linesDeleted: c.linesDeleted > 0 ? c.linesDeleted : Math.round(issue.rrDifficulty * 6 + 4),
-      filesChanged: c.filesChanged > 0 ? c.filesChanged : Math.max(1, Math.round(issue.rrDifficulty / 2.5)),
-      language: lang,
-      category,
-      area,
-      techniques,
-      analysis: caseStudyData,
-    };
-  });
 
   // 2. Repositories Footprint
   const repoMap = new Map<string, RepoFootprintItem>();

@@ -36,6 +36,7 @@ interface Props {
 }
 
 export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false }) => {
+  const [statusFilter, setStatusFilter] = useState<'MERGED' | 'OPEN' | 'CLOSED' | 'ALL'>('MERGED');
   const [expandedId, setExpandedId] = useState<string | null>(
     data.history.length > 0 ? data.history[0].id : null
   );
@@ -167,13 +168,23 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
     }
   };
 
-  // Filter history items by search query, category, or capability filter
+  // Filter history items by search query, category, capability, or PR status filter
   const filteredHistory = localHistory.filter((item) => {
     const text = `${item.issueTitle} ${item.repoFullName} ${item.area} ${item.category} ${item.techniques.join(' ')}`.toLowerCase();
     const matchesQuery = !filterQuery || text.includes(filterQuery.toLowerCase());
     const matchesCategory = !selectedCategory || item.category === selectedCategory || item.area === selectedCategory;
     const matchesCapability = !selectedCapability || selectedCapability.contributions.some((c) => c.id === item.id);
-    return matchesQuery && matchesCategory && matchesCapability;
+
+    let matchesStatus = true;
+    if (statusFilter === 'MERGED') {
+      matchesStatus = item.prStatus === 'MERGED';
+    } else if (statusFilter === 'OPEN') {
+      matchesStatus = item.prStatus === 'OPEN';
+    } else if (statusFilter === 'CLOSED') {
+      matchesStatus = item.prStatus === 'CLOSED';
+    }
+
+    return matchesQuery && matchesCategory && matchesCapability && matchesStatus;
   });
 
   const { user } = data;
@@ -265,24 +276,67 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
         </div>
 
         {/* SEARCH & FILTER CONTROLS */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl border border-slate-800/80 bg-slate-950/50 backdrop-blur-xl font-mono text-xs">
-          <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-            <input
-              type="text"
-              placeholder="Search techniques, repos, issues..."
-              value={filterQuery}
-              onChange={(e) => setFilterQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
-            />
-            {filterQuery && (
-              <button onClick={() => setFilterQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-4 rounded-xl border border-slate-800/80 bg-slate-950/50 backdrop-blur-xl font-mono text-xs">
+          <div className="flex items-center gap-1.5 p-1 bg-slate-900 border border-slate-800 rounded-xl w-full sm:w-auto">
+            <button
+              onClick={() => setStatusFilter('MERGED')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
+                statusFilter === 'MERGED'
+                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-700/60 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Merged ({localHistory.filter((h) => h.prStatus === 'MERGED').length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('OPEN')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
+                statusFilter === 'OPEN'
+                  ? 'bg-blue-950 text-blue-300 border border-blue-700/60 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Open ({localHistory.filter((h) => h.prStatus === 'OPEN').length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('CLOSED')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
+                statusFilter === 'CLOSED'
+                  ? 'bg-slate-800 text-slate-300 border border-slate-700/60 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Closed ({localHistory.filter((h) => h.prStatus === 'CLOSED').length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('ALL')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
+                statusFilter === 'ALL'
+                  ? 'bg-purple-950 text-purple-300 border border-purple-700/60 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              All ({localHistory.length})
+            </button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+            <div className="relative w-full sm:w-72">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                type="text"
+                placeholder="Search techniques, repos, issues..."
+                value={filterQuery}
+                onChange={(e) => setFilterQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+              />
+              {filterQuery && (
+                <button onClick={() => setFilterQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
             {selectedCapability && (
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/80 border border-emerald-700/60 text-emerald-300 font-bold">
                 <span>Filter: {selectedCapability.name}</span>
@@ -310,7 +364,7 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
               <BookOpen className="w-8 h-8" />
             </div>
             <h3 className="text-lg font-bold text-slate-200">
-              {data.hasData ? 'No contributions match the selected filter.' : "You haven't had a contribution verified yet."}
+              {data.hasData ? `No ${statusFilter.toLowerCase()} contributions match the selected filter.` : "You haven't had a contribution verified yet."}
             </h3>
             <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
               {data.hasData
@@ -333,7 +387,7 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
             <div className="flex items-center justify-between font-mono">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
                 <Brain className="w-5 h-5 text-emerald-400" />
-                ENGINEERING CASE STUDIES ({filteredHistory.length})
+                ENGINEERING CONTRIBUTIONS ({filteredHistory.length})
               </h2>
               <span className="text-xs text-slate-500">Click a contribution card to inspect details</span>
             </div>
@@ -342,6 +396,8 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
               {filteredHistory.map((item) => {
                 const isExpanded = expandedId === item.id;
                 const analysis = item.analysis;
+                const isMerged = item.prStatus === 'MERGED';
+                const isOpen = item.prStatus === 'OPEN';
 
                 return (
                   <div
@@ -365,23 +421,39 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                             {item.repoFullName}
                           </span>
                           <span className="text-slate-700">•</span>
-                          {/* PR # & Status */}
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 font-bold text-[11px]">
-                            PR #{item.prNumber} · MERGED ✓
-                          </span>
-                          <span className="text-slate-700">•</span>
-                          {/* Difficulty Badge */}
-                          <span
-                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                              item.rrDifficulty >= 8.0
-                                ? 'bg-rose-950/80 text-rose-300 border border-rose-800/60'
-                                : item.rrDifficulty >= 6.0
-                                ? 'bg-amber-950/80 text-amber-300 border border-amber-800/60'
-                                : 'bg-blue-950/80 text-blue-300 border border-blue-800/60'
-                            }`}
-                          >
-                            RR {item.rrDifficulty.toFixed(1)} · {item.rrDifficulty >= 8.0 ? 'VERY HARD' : item.rrDifficulty >= 6.0 ? 'HARD' : 'MODERATE'}
-                          </span>
+
+                          {/* PR # & Status Badge */}
+                          {isMerged ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 font-bold text-[11px]">
+                              PR #{item.prNumber} · Merged ✓
+                            </span>
+                          ) : isOpen ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-blue-950/80 text-blue-300 border border-blue-800/60 font-bold text-[11px]">
+                              PR #{item.prNumber} · Open ●
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-slate-900 text-slate-400 border border-slate-700 font-bold text-[11px]">
+                              PR #{item.prNumber} · Closed ×
+                            </span>
+                          )}
+
+                          {isMerged && item.rrDifficulty > 0 && (
+                            <>
+                              <span className="text-slate-700">•</span>
+                              {/* Difficulty Badge */}
+                              <span
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                                  item.rrDifficulty >= 8.0
+                                    ? 'bg-rose-950/80 text-rose-300 border border-rose-800/60'
+                                    : item.rrDifficulty >= 6.0
+                                    ? 'bg-amber-950/80 text-amber-300 border border-amber-800/60'
+                                    : 'bg-blue-950/80 text-blue-300 border border-blue-800/60'
+                                }`}
+                              >
+                                RR {item.rrDifficulty.toFixed(1)} · {item.rrDifficulty >= 8.0 ? 'VERY HARD' : item.rrDifficulty >= 6.0 ? 'HARD' : 'MODERATE'}
+                              </span>
+                            </>
+                          )}
                         </div>
 
                         {/* Title */}
@@ -408,7 +480,11 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                       {/* Right Meta Info */}
                       <div className="flex items-center justify-between md:justify-end gap-5 border-t md:border-t-0 pt-3 md:pt-0 border-slate-900">
                         <div className="text-right">
-                          <div className="text-sm font-extrabold text-amber-300">+{item.rrPoints} RR</div>
+                          {isMerged && item.rrPoints > 0 ? (
+                            <div className="text-sm font-extrabold text-amber-300">+{item.rrPoints} RR</div>
+                          ) : (
+                            <div className="text-[11px] font-semibold text-slate-500">Not yet eligible for RR Points</div>
+                          )}
                           <div className="text-[10px] text-slate-500">{item.mergedAt}</div>
                         </div>
 
@@ -418,35 +494,37 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                       </div>
                     </div>
 
-                    {/* EXPANDED FULL CASE STUDY VIEW */}
-                    {isExpanded && analysis && (
-                      <div className="border-t border-slate-800/80 p-6 space-y-8 font-mono bg-slate-950/90 rounded-b-2xl">
-                        {/* CASE STUDY PROVENANCE HEADER */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-slate-800 bg-slate-900/60 text-xs text-slate-400">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Brain className="w-4 h-4 text-emerald-400" />
-                            <span className="font-bold text-slate-200">AI-generated analysis</span>
-                            <span>•</span>
-                            <span className="text-[11px] text-slate-400">
-                              Based on Issue · PR · Commits · Diff · Reviews · Tests
-                            </span>
-                            {analysis.contributorEdited && (
-                              <span className="px-2 py-0.5 rounded-full bg-blue-950 text-blue-300 border border-blue-700/60 font-bold text-[10px]">
-                                Contributor edited
+                    {/* EXPANDED VIEW */}
+                    {isExpanded && (
+                      isMerged && analysis ? (
+                        /* EXPANDED FULL CASE STUDY VIEW FOR MERGED PRs */
+                        <div className="border-t border-slate-800/80 p-6 space-y-8 font-mono bg-slate-950/90 rounded-b-2xl">
+                          {/* CASE STUDY PROVENANCE HEADER */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-slate-800 bg-slate-900/60 text-xs text-slate-400">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Brain className="w-4 h-4 text-emerald-400" />
+                              <span className="font-bold text-slate-200">AI-generated analysis</span>
+                              <span>•</span>
+                              <span className="text-[11px] text-slate-400">
+                                Based on Issue · PR · Commits · Diff · Reviews · Tests
                               </span>
+                              {analysis.contributorEdited && (
+                                <span className="px-2 py-0.5 rounded-full bg-blue-950 text-blue-300 border border-blue-700/60 font-bold text-[10px]">
+                                  Contributor edited
+                                </span>
+                              )}
+                            </div>
+
+                            {isOwner && (
+                              <button
+                                onClick={() => handleStartEditAnalysis(item)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 transition-colors self-start sm:self-auto"
+                              >
+                                <Edit3 className="w-3.5 h-3.5 text-blue-400" />
+                                <span>Edit analysis</span>
+                              </button>
                             )}
                           </div>
-
-                          {isOwner && (
-                            <button
-                              onClick={() => handleStartEditAnalysis(item)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 transition-colors self-start sm:self-auto"
-                            >
-                              <Edit3 className="w-3.5 h-3.5 text-blue-400" />
-                              <span>Edit analysis</span>
-                            </button>
-                          )}
-                        </div>
 
                         {/* SECTION 1: PROBLEM */}
                         <div className="space-y-2">
@@ -638,6 +716,40 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                           )}
                         </div>
                       </div>
+                      ) : isExpanded ? (
+                        /* EXPANDED FACTUAL GITHUB PR OVERVIEW FOR NON-MERGED PRs */
+                        <div className="border-t border-slate-800/80 p-6 space-y-4 font-mono bg-slate-950/90 rounded-b-2xl">
+                          <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
+                            <GitPullRequest className="w-4 h-4 text-blue-400" />
+                            <span>Factual GitHub Pull Request Overview</span>
+                          </div>
+                          <div className="p-4 rounded-xl border border-slate-800/80 bg-slate-900/40 text-xs text-slate-300 space-y-2 leading-relaxed">
+                            <p>
+                              <span className="font-bold text-slate-200">Repository:</span> {item.repoFullName}
+                            </p>
+                            <p>
+                              <span className="font-bold text-slate-200">Pull Request:</span> PR #{item.prNumber} ({item.prStatus})
+                            </p>
+                            <div className="pt-1 text-slate-400">
+                              This pull request is currently <strong className="text-slate-200">{item.prStatus === 'OPEN' ? 'OPEN' : 'CLOSED UNMERGED'}</strong> on GitHub.
+                              RR Points and AI Case Studies are awarded strictly upon maintainer verification of merged pull requests.
+                            </div>
+                            {item.prUrl && (
+                              <div className="pt-2">
+                                <a
+                                  href={item.prUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-[11px] transition-colors"
+                                >
+                                  <span>View PR #{item.prNumber} on GitHub</span>
+                                  <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : null
                     )}
                   </div>
                 );
