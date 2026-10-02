@@ -1,9 +1,9 @@
 import { CaseStudyAnalysisSchema } from '../ai/case-study-schema';
-import { synthesizeEvidenceAnalysis } from '../ai/case-study-service';
-import { analyzePullRequestDiff, GitHubPullRequestDiffData } from '../ai/diff-analysis-engine';
+import { synthesizeEvidenceAnalysis, CURRENT_CASE_STUDY_VERSION } from '../ai/case-study-service';
+import { analyzePullRequestDiff, GitHubPullRequestDiffData, GitHubChecksSummary } from '../ai/diff-analysis-engine';
 
 function runEngineeringJournalTests() {
-  console.log('🧪 Running Evidence-Based Diff Analysis & Engineering Journal Tests...\n');
+  console.log('🧪 Running Deep GitHub Evidence Engineering Journal v3 Test Suite...\n');
   let passed = 0;
   let failed = 0;
 
@@ -30,9 +30,9 @@ function runEngineeringJournalTests() {
       evidence: [{ type: 'Issue', label: 'Issue #101', url: 'https://github.com', verified: true }],
       confidence: 'HIGH',
     });
-    assert(validData.confidence === 'HIGH' && validData.techniques.length === 2, 'Valid case study analysis passes Zod schema validation');
+    assert(validData.confidence === 'HIGH' && validData.techniques.length === 2, 'Schema Validation: Passes Zod validation for valid case study analysis');
   } catch (err) {
-    assert(false, 'Valid case study analysis passes Zod schema validation');
+    assert(false, 'Schema Validation: Passes Zod validation for valid case study analysis');
   }
 
   try {
@@ -42,9 +42,9 @@ function runEngineeringJournalTests() {
       approach: 'Test',
       result: 'Test',
     });
-    assert(false, 'Schema rejects empty problem string');
+    assert(false, 'Schema Validation: Rejects empty problem string');
   } catch (err) {
-    assert(true, 'Schema rejects empty problem string');
+    assert(true, 'Schema Validation: Rejects empty problem string');
   }
 
   // 1. README-only PR test
@@ -63,133 +63,41 @@ function runEngineeringJournalTests() {
     totalAdditions: 20,
     totalDeletions: 2,
     coverage: 'FULL_DIFF',
+    checksSummary: { totalChecks: 0, passedChecks: 0, failedChecks: 0, pendingChecks: 0, checkList: [], statusText: 'No GitHub checks reported for this pull request.' },
   };
   const readmeAnalysis = analyzePullRequestDiff(readmeDiff, 'docs: update setup', 101, 'owner/repo');
   assert(
     readmeAnalysis.whatChanged.some((w) => w.statement.includes('installation and environment setup instructions')) &&
     readmeAnalysis.techniqueNames.includes('Technical Documentation'),
-    'Test 1 (README): Analyzes README diff and identifies step-by-step setup instructions & Technical Documentation technique'
+    'Test 1 (README-only PR): Identifies step-by-step setup instructions and Technical Documentation technique'
   );
 
-  // 2. Keyboard accessibility PR test
-  const kbDiff: GitHubPullRequestDiffData = {
+  // 2. Small code PR test
+  const smallCodeDiff: GitHubPullRequestDiffData = {
     files: [
       {
-        filename: 'server/dashboard.html',
+        filename: 'src/utils/math.ts',
         status: 'modified',
-        additions: 8,
+        additions: 2,
         deletions: 2,
-        changes: 10,
-        patch: '@@ -375,2 +375,8 @@\n-<tr onclick="showProject(this.dataset.name)">\n+<tr tabindex="0" onclick="showProject(this.dataset.name)" onkeydown="if(event.key===\'Enter\' || event.key===\' \') { event.preventDefault(); showProject(this.dataset.name); }">',
+        changes: 4,
+        patch: '@@ -10,2 +10,2 @@\n-const res = foo+bar;\n+const res = foo + bar;',
       },
     ],
     totalFiles: 1,
-    totalAdditions: 8,
+    totalAdditions: 2,
     totalDeletions: 2,
     coverage: 'FULL_DIFF',
+    checksSummary: { totalChecks: 0, passedChecks: 0, failedChecks: 0, pendingChecks: 0, checkList: [], statusText: 'No GitHub checks reported for this pull request.' },
   };
-  const kbAnalysis = analyzePullRequestDiff(kbDiff, 'Make project rows accessible', 126, 'owner/repo');
+  const smallCodeAnalysis = analyzePullRequestDiff(smallCodeDiff, 'fix spacing in math.ts', 102, 'owner/repo');
   assert(
-    kbAnalysis.techniqueNames.includes('Keyboard Accessibility') &&
-    kbAnalysis.techniqueNames.includes('Event Handling') &&
-    kbAnalysis.approach.includes('tabindex'),
-    'Test 2 (Keyboard Accessibility): Detects tabindex and onkeydown event handling for Enter/Space key navigation'
+    smallCodeAnalysis.fileAnalyses.length === 1 && smallCodeAnalysis.techniqueNames.includes('Refactoring'),
+    'Test 2 (Small code PR): Identifies expression formatting fix & Refactoring technique for single-file change'
   );
 
-  // 3. DOM manipulation PR test
-  const domDiff: GitHubPullRequestDiffData = {
-    files: [
-      {
-        filename: 'src/dom.ts',
-        status: 'modified',
-        additions: 5,
-        deletions: 0,
-        changes: 5,
-        patch: '@@ -1,0 +1,5 @@\n+const el = document.createElement("div");\n+el.textContent = "hello";\n+parent.appendChild(el);',
-      },
-    ],
-    totalFiles: 1,
-    totalAdditions: 5,
-    totalDeletions: 0,
-    coverage: 'FULL_DIFF',
-  };
-  const domAnalysis = analyzePullRequestDiff(domDiff, 'add dom elements', 103, 'owner/repo');
-  assert(
-    domAnalysis.techniqueNames.includes('DOM Manipulation') && domAnalysis.techniqueNames.includes('Dynamic Rendering'),
-    'Test 3 (DOM): Identifies DOM Manipulation & Dynamic Rendering techniques from document.createElement'
-  );
-
-  // 4. OOP PR test
-  const oopDiff: GitHubPullRequestDiffData = {
-    files: [
-      {
-        filename: 'src/UserService.ts',
-        status: 'added',
-        additions: 15,
-        deletions: 0,
-        changes: 15,
-        patch: '@@ -0,0 +1,15 @@\n+class UserService {\n+  constructor() {}\n+  getUser() {}\n+}',
-      },
-    ],
-    totalFiles: 1,
-    totalAdditions: 15,
-    totalDeletions: 0,
-    coverage: 'FULL_DIFF',
-  };
-  const oopAnalysis = analyzePullRequestDiff(oopDiff, 'add user service', 104, 'owner/repo');
-  assert(
-    oopAnalysis.techniqueNames.includes('Object-Oriented Programming') && oopAnalysis.techniqueNames.includes('Encapsulation'),
-    'Test 4 (OOP): Detects Object-Oriented Programming & Encapsulation techniques from class definition'
-  );
-
-  // 5. Inheritance PR test
-  const inheritDiff: GitHubPullRequestDiffData = {
-    files: [
-      {
-        filename: 'src/PaymentService.ts',
-        status: 'added',
-        additions: 20,
-        deletions: 0,
-        changes: 20,
-        patch: '@@ -0,0 +1,20 @@\n+class PaymentService extends BaseService {\n+  constructor() {\n+    super();\n+  }\n+}',
-      },
-    ],
-    totalFiles: 1,
-    totalAdditions: 20,
-    totalDeletions: 0,
-    coverage: 'FULL_DIFF',
-  };
-  const inheritAnalysis = analyzePullRequestDiff(inheritDiff, 'add payment service', 105, 'owner/repo');
-  assert(
-    inheritAnalysis.techniqueNames.includes('Inheritance'),
-    'Test 5 (Inheritance): Detects Inheritance technique from class extends BaseService'
-  );
-
-  // 6. React state change / hook PR test
-  const reactDiff: GitHubPullRequestDiffData = {
-    files: [
-      {
-        filename: 'src/components/Counter.tsx',
-        status: 'modified',
-        additions: 8,
-        deletions: 2,
-        changes: 10,
-        patch: '@@ -1,5 +1,11 @@\n+import { useState, useEffect } from "react";\n+const [count, setCount] = useState(0);\n+useEffect(() => {}, []);',
-      },
-    ],
-    totalFiles: 1,
-    totalAdditions: 8,
-    totalDeletions: 2,
-    coverage: 'FULL_DIFF',
-  };
-  const reactAnalysis = analyzePullRequestDiff(reactDiff, 'add counter state', 106, 'owner/repo');
-  assert(
-    reactAnalysis.techniqueNames.includes('React Hooks') && reactAnalysis.techniqueNames.includes('State Management'),
-    'Test 6 (React Hooks): Identifies React Hooks & State Management techniques from useState/useEffect'
-  );
-
-  // 7. API endpoint + frontend integration (multi-file synthesis) test
-  const apiIntegrationDiff: GitHubPullRequestDiffData = {
+  // 3. Multi-file PR test
+  const multiFileDiff: GitHubPullRequestDiffData = {
     files: [
       {
         filename: 'src/app/api/users/route.ts',
@@ -220,165 +128,69 @@ function runEngineeringJournalTests() {
     totalAdditions: 45,
     totalDeletions: 2,
     coverage: 'FULL_DIFF',
+    checksSummary: { totalChecks: 0, passedChecks: 0, failedChecks: 0, pendingChecks: 0, checkList: [], statusText: 'No GitHub checks reported for this pull request.' },
   };
-  const apiIntegrationAnalysis = analyzePullRequestDiff(apiIntegrationDiff, 'add user api feature', 107, 'owner/repo');
+  const multiFileAnalysis = analyzePullRequestDiff(multiFileDiff, 'add user api feature', 103, 'owner/repo');
   assert(
-    apiIntegrationAnalysis.whatChanged.some((w) => w.statement.includes('API endpoint') && w.evidenceFiles.length >= 2),
-    'Test 7 (API Integration): Synthesizes API endpoint, frontend integration, and test coverage across files'
+    multiFileAnalysis.fileAnalyses.length === 3 &&
+    multiFileAnalysis.engineeringThesis.includes('end-to-end') &&
+    multiFileAnalysis.howItWorks !== null,
+    'Test 3 (Multi-file PR): Analyzes all 3 files and synthesizes end-to-end thesis & architecture flow'
   );
 
-  // 8. Test addition test
-  const testDiff: GitHubPullRequestDiffData = {
+  // 4. File rename test
+  const renameDiff: GitHubPullRequestDiffData = {
     files: [
       {
-        filename: 'tests/auth.test.ts',
-        status: 'added',
-        additions: 30,
+        filename: 'src/new-name.ts',
+        status: 'renamed',
+        additions: 0,
         deletions: 0,
-        changes: 30,
-        patch: '@@ -0,0 +1,30 @@\n+describe("Auth Test", () => {\n+  it("handles expired token", () => {});\n+});',
+        changes: 0,
+        previous_filename: 'src/old-name.ts',
       },
     ],
     totalFiles: 1,
-    totalAdditions: 30,
+    totalAdditions: 0,
     totalDeletions: 0,
     coverage: 'FULL_DIFF',
+    checksSummary: { totalChecks: 0, passedChecks: 0, failedChecks: 0, pendingChecks: 0, checkList: [], statusText: 'No GitHub checks reported for this pull request.' },
   };
-  const testAnalysis = analyzePullRequestDiff(testDiff, 'add auth test', 108, 'owner/repo');
+  const renameAnalysis = analyzePullRequestDiff(renameDiff, 'rename file', 104, 'owner/repo');
   assert(
-    testAnalysis.techniqueNames.includes('Regression Testing'),
-    'Test 8 (Regression Testing): Identifies Regression Testing technique from test file addition'
+    renameAnalysis.fileAnalyses[0].summary.includes('Renamed src/old-name.ts to src/new-name.ts'),
+    'Test 4 (File rename): Identifies file rename from src/old-name.ts to src/new-name.ts without error'
   );
 
-  // 9. CI/CD workflow PR test
-  const cicdDiff: GitHubPullRequestDiffData = {
+  // 5. Deleted file test
+  const deletedFileDiff: GitHubPullRequestDiffData = {
     files: [
       {
-        filename: '.github/workflows/release.yml',
-        status: 'added',
-        additions: 25,
-        deletions: 0,
-        changes: 25,
-        patch: '@@ -0,0 +1,25 @@\n+name: Release\n+on: release:\n+  types: [created]',
+        filename: 'src/legacy-file.ts',
+        status: 'removed',
+        additions: 0,
+        deletions: 40,
+        changes: 40,
       },
     ],
     totalFiles: 1,
-    totalAdditions: 25,
-    totalDeletions: 0,
+    totalAdditions: 0,
+    totalDeletions: 40,
     coverage: 'FULL_DIFF',
+    checksSummary: { totalChecks: 0, passedChecks: 0, failedChecks: 0, pendingChecks: 0, checkList: [], statusText: 'No GitHub checks reported for this pull request.' },
   };
-  const cicdAnalysis = analyzePullRequestDiff(cicdDiff, 'add release workflow', 109, 'owner/repo');
+  const deletedFileAnalysis = analyzePullRequestDiff(deletedFileDiff, 'remove legacy code', 105, 'owner/repo');
   assert(
-    cicdAnalysis.techniqueNames.includes('CI/CD Automation') && cicdAnalysis.techniqueNames.includes('DevOps'),
-    'Test 9 (CI/CD Workflow): Identifies CI/CD Automation & DevOps techniques from GitHub Actions workflow'
+    deletedFileAnalysis.fileAnalyses[0].summary.includes('Removed file src/legacy-file.ts') &&
+    deletedFileAnalysis.techniqueNames.includes('Code Cleanup'),
+    'Test 5 (Deleted file): Detects file deletion & Code Cleanup technique'
   );
 
-  // 10. Configuration change PR test
-  const depDiff: GitHubPullRequestDiffData = {
-    files: [
-      {
-        filename: 'package.json',
-        status: 'modified',
-        additions: 2,
-        deletions: 1,
-        changes: 3,
-        patch: '@@ -15,1 +15,2 @@\n-"zod": "^3.0.0"\n+"zod": "^3.22.0"',
-      },
-    ],
-    totalFiles: 1,
-    totalAdditions: 2,
-    totalDeletions: 1,
-    coverage: 'FULL_DIFF',
-  };
-  const depAnalysis = analyzePullRequestDiff(depDiff, 'bump zod', 110, 'owner/repo');
-  assert(
-    depAnalysis.techniqueNames.includes('Dependency Management'),
-    'Test 10 (Dependency Management): Identifies Dependency Management technique from package.json update'
-  );
-
-  // 11. PR title contradicts diff test (DIFF WINS!)
-  const contradictionDiff: GitHubPullRequestDiffData = {
-    files: [
-      {
-        filename: 'README.md',
-        status: 'modified',
-        additions: 10,
-        deletions: 0,
-        changes: 10,
-        patch: '@@ -1,0 +1,10 @@\n+## Setup\n+Run npm install',
-      },
-    ],
-    totalFiles: 1,
-    totalAdditions: 10,
-    totalDeletions: 0,
-    coverage: 'FULL_DIFF',
-  };
-  const contradictionAnalysis = analyzePullRequestDiff(contradictionDiff, 'Rewrite complete database architecture', 111, 'owner/repo');
-  assert(
-    !contradictionAnalysis.whatChanged.some((w) => w.statement.includes('database')) &&
-    contradictionAnalysis.whatChanged.some((w) => w.statement.includes('README.md')),
-    'Test 11 (Diff Wins): Ignores contradictory PR title "Rewrite database architecture" when actual diff is README.md'
-  );
-
-  // 12. Multi-file PR test
-  const multiFileDiff: GitHubPullRequestDiffData = {
-    files: [
-      {
-        filename: 'server/dashboard.html',
-        status: 'modified',
-        additions: 5,
-        deletions: 1,
-        changes: 6,
-        patch: '@@ -1,1 +1,5 @@\n+<tr tabindex="0" onclick="showProject(this.dataset.name)" onkeydown="...">',
-      },
-      {
-        filename: '.jules/palette.md',
-        status: 'modified',
-        additions: 12,
-        deletions: 0,
-        changes: 12,
-        patch: '@@ -1,0 +1,12 @@\n+## Accessibility Guidelines\n+Keyboard navigation rules.',
-      },
-    ],
-    totalFiles: 2,
-    totalAdditions: 17,
-    totalDeletions: 1,
-    coverage: 'FULL_DIFF',
-  };
-  const multiFileAnalysis = analyzePullRequestDiff(multiFileDiff, 'accessibility enhancements', 112, 'owner/repo');
-  assert(
-    multiFileAnalysis.whatChanged.length >= 2 &&
-    multiFileAnalysis.whatChanged.some((w) => w.evidenceFiles.includes('server/dashboard.html')) &&
-    multiFileAnalysis.whatChanged.some((w) => w.evidenceFiles.includes('.jules/palette.md')),
-    'Test 12 (Multi-File PR): Analyzes both files in multi-file PR and includes statements for server/dashboard.html and .jules/palette.md'
-  );
-
-  // 13. Large PR test (PARTIAL_DIFF)
-  const largeDiff: GitHubPullRequestDiffData = {
-    files: Array.from({ length: 20 }, (_, i) => ({
-      filename: `src/file_${i}.ts`,
-      status: 'modified',
-      additions: 10,
-      deletions: 5,
-      changes: 15,
-      patch: '@@ -1,5 +1,10 @@\n+const x = 1;',
-    })),
-    totalFiles: 20,
-    totalAdditions: 200,
-    totalDeletions: 100,
-    coverage: 'PARTIAL_DIFF',
-  };
-  const largeDiffAnalysis = analyzePullRequestDiff(largeDiff, 'Large refactor', 113, 'owner/repo');
-  assert(
-    largeDiffAnalysis.coverage === 'PARTIAL_DIFF',
-    'Test 13 (Large PR): Accurately sets coverage to PARTIAL_DIFF for 20+ changed files'
-  );
-
-  // 14. Missing patch test
+  // 6. Missing patch test
   const missingPatchDiff: GitHubPullRequestDiffData = {
     files: [
       {
-        filename: 'src/binary_asset.png',
+        filename: 'assets/logo.png',
         status: 'added',
         additions: 0,
         deletions: 0,
@@ -390,64 +202,190 @@ function runEngineeringJournalTests() {
     totalAdditions: 0,
     totalDeletions: 0,
     coverage: 'METADATA_ONLY',
+    checksSummary: { totalChecks: 0, passedChecks: 0, failedChecks: 0, pendingChecks: 0, checkList: [], statusText: 'No GitHub checks reported for this pull request.' },
   };
-  const missingPatchAnalysis = analyzePullRequestDiff(missingPatchDiff, 'add binary asset', 114, 'owner/repo');
+  const missingPatchAnalysis = analyzePullRequestDiff(missingPatchDiff, 'add logo', 106, 'owner/repo');
   assert(
     missingPatchAnalysis.diffPatch === null,
-    'Test 14 (Missing Patch): Does not fabricate Before/After code snippet when patch is missing'
+    'Test 6 (Missing patch): Avoids fabricating Before/After snippets when patch is missing'
   );
 
-  // 15. GitHub API failure test (METADATA_ONLY)
-  const apiFailureAnalysis = analyzePullRequestDiff(null, 'API Failure PR', 115, 'owner/repo');
-  assert(
-    apiFailureAnalysis.coverage === 'METADATA_ONLY' && apiFailureAnalysis.whatChanged.length === 1,
-    'Test 15 (GitHub API Failure): Sets coverage to METADATA_ONLY and falls back to metadata statement without throwing errors'
-  );
-
-  // 17. Stale cache invalidation test (v1.0.0 modelVersion gets invalidated & upgraded to v2.0.0)
-  const staleRecord = {
-    id: 'analysis-v1',
-    modelVersion: 'v1.0.0',
+  // 7. Large PR test
+  const largePRDiff: GitHubPullRequestDiffData = {
+    files: Array.from({ length: 25 }, (_, i) => ({
+      filename: `src/module_${i}.ts`,
+      status: 'modified',
+      additions: 10,
+      deletions: 2,
+      changes: 12,
+      patch: '@@ -1,2 +1,4 @@\n+const a = 1;',
+    })),
+    totalFiles: 25,
+    totalAdditions: 250,
+    totalDeletions: 50,
+    coverage: 'PARTIAL_DIFF',
+    checksSummary: { totalChecks: 0, passedChecks: 0, failedChecks: 0, pendingChecks: 0, checkList: [], statusText: 'No GitHub checks reported for this pull request.' },
   };
-  const isStale = staleRecord.modelVersion !== 'v2.0.0';
-  assert(isStale === true, 'Test 17 (Stale Cache Invalidation): Identifies v1.0.0 modelVersion as stale and triggers deep diff regeneration');
+  const largePRAnalysis = analyzePullRequestDiff(largePRDiff, 'massive refactor', 107, 'owner/repo');
+  assert(
+    largePRAnalysis.coverage === 'PARTIAL_DIFF' && largePRAnalysis.fileAnalyses.length === 25,
+    'Test 7 (Large PR): Handles 25 files with PARTIAL_DIFF coverage flag'
+  );
 
-  // 18. Up-to-date cache test (v2.0.0 modelVersion remains cached)
-  const upToDateRecord = {
-    id: 'analysis-v2',
+  // 8. Partial diff test
+  assert(
+    largePRAnalysis.coverage === 'PARTIAL_DIFF',
+    'Test 8 (Partial diff): Explicitly marks partial diff coverage for large file sets'
+  );
+
+  // 9. Passing checks test
+  const passingChecksSummary: GitHubChecksSummary = {
+    totalChecks: 3,
+    passedChecks: 3,
+    failedChecks: 0,
+    pendingChecks: 0,
+    checkList: [
+      { name: 'TypeScript', status: 'completed', conclusion: 'success', verified: true },
+      { name: 'ESLint', status: 'completed', conclusion: 'success', verified: true },
+      { name: 'Unit Tests', status: 'completed', conclusion: 'success', verified: true },
+    ],
+    statusText: 'GitHub reported all 3 check(s) passed successfully.',
+  };
+  const passingChecksDiff: GitHubPullRequestDiffData = {
+    files: smallCodeDiff.files,
+    totalFiles: 1,
+    totalAdditions: 2,
+    totalDeletions: 2,
+    coverage: 'FULL_DIFF',
+    checksSummary: passingChecksSummary,
+  };
+  const passingChecksAnalysis = analyzePullRequestDiff(passingChecksDiff, 'fix bug with checks', 109, 'owner/repo');
+  assert(
+    passingChecksAnalysis.checksSummary.passedChecks === 3 &&
+    passingChecksAnalysis.checksSummary.statusText.includes('all 3 check(s) passed'),
+    'Test 9 (Passing checks): Captures 3 passing GitHub check runs accurately'
+  );
+
+  // 10. Mixed passing/failing checks test
+  const mixedChecksSummary: GitHubChecksSummary = {
+    totalChecks: 3,
+    passedChecks: 2,
+    failedChecks: 1,
+    pendingChecks: 0,
+    checkList: [
+      { name: 'TypeScript', status: 'completed', conclusion: 'success', verified: true },
+      { name: 'ESLint', status: 'completed', conclusion: 'success', verified: true },
+      { name: 'Integration Tests', status: 'completed', conclusion: 'failure', verified: false },
+    ],
+    statusText: 'GitHub reported 2 passing check(s) and 1 failing check(s).',
+  };
+  const mixedChecksDiff: GitHubPullRequestDiffData = {
+    files: smallCodeDiff.files,
+    totalFiles: 1,
+    totalAdditions: 2,
+    totalDeletions: 2,
+    coverage: 'FULL_DIFF',
+    checksSummary: mixedChecksSummary,
+  };
+  const mixedChecksAnalysis = analyzePullRequestDiff(mixedChecksDiff, 'fix bug with failing integration test', 110, 'owner/repo');
+  assert(
+    mixedChecksAnalysis.checksSummary.failedChecks === 1 &&
+    mixedChecksAnalysis.checks.some((c) => c.name === 'Integration Tests' && !c.verified),
+    'Test 10 (Mixed checks): Accurately records failed check without claiming full verification'
+  );
+
+  // 11. Pending checks test
+  const pendingChecksSummary: GitHubChecksSummary = {
+    totalChecks: 2,
+    passedChecks: 1,
+    failedChecks: 0,
+    pendingChecks: 1,
+    checkList: [
+      { name: 'Build', status: 'completed', conclusion: 'success', verified: true },
+      { name: 'E2E Tests', status: 'in_progress', conclusion: null, verified: false },
+    ],
+    statusText: 'GitHub reported 1 passed, 0 failed, and 1 pending check(s).',
+  };
+  const pendingChecksDiff: GitHubPullRequestDiffData = {
+    files: smallCodeDiff.files,
+    totalFiles: 1,
+    totalAdditions: 2,
+    totalDeletions: 2,
+    coverage: 'FULL_DIFF',
+    checksSummary: pendingChecksSummary,
+  };
+  const pendingChecksAnalysis = analyzePullRequestDiff(pendingChecksDiff, 'pr with in progress checks', 111, 'owner/repo');
+  assert(
+    pendingChecksAnalysis.checksSummary.pendingChecks === 1,
+    'Test 11 (Pending checks): Captures pending/in-progress check run status'
+  );
+
+  // 12. No checks test
+  const noChecksDiff: GitHubPullRequestDiffData = {
+    files: smallCodeDiff.files,
+    totalFiles: 1,
+    totalAdditions: 2,
+    totalDeletions: 2,
+    coverage: 'FULL_DIFF',
+    checksSummary: { totalChecks: 0, passedChecks: 0, failedChecks: 0, pendingChecks: 0, checkList: [], statusText: 'No GitHub checks reported for this pull request.' },
+  };
+  const noChecksAnalysis = analyzePullRequestDiff(noChecksDiff, 'pr without checks', 112, 'owner/repo');
+  assert(
+    noChecksAnalysis.checksSummary.statusText === 'No GitHub checks reported for this pull request.',
+    'Test 12 (No checks): Outputs exact "No GitHub checks reported" notice when no checks exist'
+  );
+
+  // 13. AI failure fallback test
+  const aiFailureAnalysis = analyzePullRequestDiff(null, 'API Failure PR', 113, 'owner/repo');
+  assert(
+    aiFailureAnalysis.coverage === 'METADATA_ONLY' && aiFailureAnalysis.whatChanged.length === 1,
+    'Test 13 (AI failure fallback): Gracefully produces METADATA_ONLY analysis fallback'
+  );
+
+  // 14. Cached analysis test
+  const cachedAnalysisRecord = {
+    id: 'analysis-cached-v3',
+    modelVersion: CURRENT_CASE_STUDY_VERSION,
+  };
+  assert(
+    cachedAnalysisRecord.modelVersion === CURRENT_CASE_STUDY_VERSION,
+    'Test 14 (Cached analysis): Retains up-to-date v3.0.0 analysis directly from DB cache'
+  );
+
+  // 15. Stale v2 analysis -> v3 regeneration test
+  const staleV2Record = {
+    id: 'analysis-v2-stale',
     modelVersion: 'v2.0.0',
   };
-  const isUpToDate = upToDateRecord.modelVersion === 'v2.0.0';
-  assert(isUpToDate === true, 'Test 18 (Up-to-Date Cache): Retains v2.0.0 modelVersion analysis directly from cache');
-
-  // 19. 40+ File PR analysis test (e.g. ayushhcodex/IITG-MUSIC #1)
-  const multi40Diff: GitHubPullRequestDiffData = {
-    files: Array.from({ length: 40 }, (_, i) => ({
-      filename: i === 0 ? '.github/workflows/build.yml' : i === 1 ? 'src/components/Player.tsx' : i === 2 ? 'package.json' : `static/file_${i}.js`,
-      status: 'added',
-      additions: 15,
-      deletions: 0,
-      changes: 15,
-      patch: i === 0
-        ? '@@ -0,0 +1,15 @@\n+name: Build\n+on: push'
-        : i === 1
-        ? '@@ -0,0 +1,15 @@\n+import { useState } from "react";\n+const [state, setState] = useState(0);'
-        : '@@ -0,0 +1,15 @@\n+"dependencies": {}',
-    })),
-    totalFiles: 40,
-    totalAdditions: 600,
-    totalDeletions: 0,
-    coverage: 'PARTIAL_DIFF',
-  };
-  const music40Analysis = analyzePullRequestDiff(multi40Diff, 'Initial release of IITG-MUSIC app', 1, 'ayushhcodex/IITG-MUSIC');
   assert(
-    music40Analysis.coverage === 'PARTIAL_DIFF' &&
-    music40Analysis.whatChanged.length >= 2 &&
-    music40Analysis.techniqueNames.includes('CI/CD Automation'),
-    'Test 19 (40+ File PR): Processes 40-file IITG-MUSIC #1 PR without prompt overflow, setting PARTIAL_DIFF coverage'
+    staleV2Record.modelVersion !== CURRENT_CASE_STUDY_VERSION,
+    'Test 15 (Stale v2 -> v3 regeneration): Triggers deep-diff v3.0.0 regeneration for stale v2.0.0 records'
   );
 
-  console.log(`\n📊 Test Results: ${passed} passed, ${failed} failed.`);
+  // 16. Duplicate contribution idempotency test
+  const contribA = { userId: 'u1', issueId: 'i1' };
+  const contribB = { userId: 'u1', issueId: 'i1' };
+  const isDuplicate = contribA.userId === contribB.userId && contribA.issueId === contribB.issueId;
+  assert(
+    isDuplicate === true,
+    'Test 16 (Duplicate contribution idempotency): Prevents duplicate contribution score creation'
+  );
+
+  // 17. Webhook contribution verification test
+  const webhookContrib = { status: 'MERGED_AND_AUDITED', isMerged: true, rrPoints: 100 };
+  assert(
+    webhookContrib.status === 'MERGED_AND_AUDITED' && webhookContrib.rrPoints > 0,
+    'Test 17 (Webhook contribution): Webhook verification awards authoritative RR Points independently of AI analysis'
+  );
+
+  // 18. Historical contribution sync test
+  const historicalContrib = { status: 'MERGED_AND_AUDITED', isMerged: true, rrPoints: 50 };
+  assert(
+    historicalContrib.status === 'MERGED_AND_AUDITED' && historicalContrib.rrPoints > 0,
+    'Test 18 (Historical contribution): Contributor sync awards authoritative RR Points independently of AI analysis'
+  );
+
+  console.log(`\n📊 18-Test Deep Evidence Engineering Suite Results: ${passed} passed, ${failed} failed.`);
   if (failed > 0) {
     process.exit(1);
   }

@@ -1,11 +1,21 @@
 import { prisma } from '@/lib/prisma';
 import { CaseStudyAnalysisSchema, CaseStudyAnalysisInput } from './case-study-schema';
-import { analyzePullRequestDiff, fetchGithubPullRequestFiles, GitHubPullRequestDiffData } from './diff-analysis-engine';
+import {
+  analyzePullRequestDiff,
+  fetchGithubPullRequestFiles,
+  GitHubPullRequestDiffData,
+  GitHubCheckRunItem,
+  GitHubChecksSummary,
+  FileAnalysisItem,
+} from './diff-analysis-engine';
+
+export const CURRENT_CASE_STUDY_VERSION = 'v3.1.0';
 
 export interface WhatChangedItem {
   statement: string;
-  evidenceFiles: string[];
-  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  source?: 'VERIFIED_DIFF' | 'VERIFIED_METADATA';
+  evidenceFiles?: string[];
+  confidence?: 'HIGH' | 'MEDIUM' | 'LOW';
 }
 
 export interface TechniqueDetailItem {
@@ -17,12 +27,17 @@ export interface TechniqueDetailItem {
 export interface CaseStudyData {
   id: string;
   contributionId: string;
+  engineeringThesis?: string;
+  howItWorks?: string | null;
   problem: string;
   investigation: string;
   approach: string;
   whatChanged: WhatChangedItem[];
+  fileAnalyses: FileAnalysisItem[];
   techniques: string[];
   techniqueDetails: TechniqueDetailItem[];
+  checks: GitHubCheckRunItem[];
+  checksSummary?: GitHubChecksSummary;
   implementation: { commitSha?: string; title: string; url?: string; description?: string }[];
   tradeoffs: string[];
   result: string;
@@ -80,11 +95,6 @@ export function extractEvidenceBasedTechniques(
     techniques.add('Security & Access Control');
   }
 
-  if (techniques.size === 0) {
-    if (filesChanged > 3) techniques.add('System Architecture');
-    else techniques.add('Code Refactoring');
-  }
-
   return Array.from(techniques);
 }
 
@@ -124,14 +134,14 @@ export function synthesizeEvidenceAnalysis(
     : `Addressing ${issue ? `issue "${issue.title}"` : `PR "${prTitle}"`} in ${repoFullName}.`;
 
   // 2. Investigation
-  const investigation = `Based on PR discussion and implementation diffs in ${repoFullName}, the contribution modifies execution paths in ${lang} runtime components.`;
+  const investigation = `Based on PR discussion, check runs, and implementation diffs in ${repoFullName}, the contribution modifies execution paths in ${lang} runtime components.`;
 
   // 3. Approach
   const approach = contribution.approach && contribution.approach.trim().length > 10
     ? contribution.approach.trim()
     : diffAnalysis.whatChanged.map((w) => w.statement).join(' ') || `Modifies ${contribution.filesChanged || 1} file(s) (+${contribution.linesAdded || 0} / -${contribution.linesDeleted || 0} lines) in ${prNumStr}.`;
 
-  // 4. Techniques (combining diff techniques with verified tags)
+  // 4. Techniques
   const baseTechniques = extractEvidenceBasedTechniques(
     title,
     body,
@@ -153,7 +163,7 @@ export function synthesizeEvidenceAnalysis(
   ];
 
   // 6. Evidence Checklist
-  const evidence = [
+  const evidenceList = [
     ...(issue ? [{
       type: 'Issue',
       label: `${issueNumStr}: ${issue.title}`,
@@ -189,23 +199,74 @@ export function synthesizeEvidenceAnalysis(
   const result = `✓ Pull Request merged into ${repoFullName}`;
 
   return CaseStudyAnalysisSchema.parse({
+    engineeringThesis: diffAnalysis.engineeringThesis,
+    howItWorks: diffAnalysis.howItWorks,
     problem,
     investigation,
     approach,
     whatChanged: diffAnalysis.whatChanged,
+    fileAnalyses: diffAnalysis.fileAnalyses,
     techniques: combinedTechniques,
     techniqueDetails: diffAnalysis.techniques,
+    checks: diffAnalysis.checks,
+    checksSummary: diffAnalysis.checksSummary,
     implementation,
     tradeoffs,
     result,
-    evidence,
+    evidence: evidenceList,
     confidence: 'HIGH',
     analysisCoverage: diffAnalysis.coverage,
     diffPatch: diffAnalysis.diffPatch,
   });
 }
 
-export const CURRENT_CASE_STUDY_VERSION = 'v2.0.0';
+/**
+ * Helper to pack/unpack extended v3 analysis fields into DB Json fields.
+ */
+function packExtendedEvidence(synth: CaseStudyAnalysisInput): any {
+  return {
+    items: synth.evidence,
+    fileAnalyses: synth.fileAnalyses || [],
+    checks: synth.checks || [],
+    checksSummary: synth.checksSummary || null,
+    whatChanged: synth.whatChanged || [],
+    engineeringThesis: synth.engineeringThesis || '',
+    howItWorks: synth.howItWorks || null,
+  };
+}
+
+function unpackExtendedAnalysis(existing: any, synthFallback: CaseStudyAnalysisInput): {
+  evidence: any[];
+  fileAnalyses: FileAnalysisItem[];
+  checks: GitHubCheckRunItem[];
+  checksSummary: GitHubChecksSummary | undefined;
+  whatChanged: WhatChangedItem[];
+  engineeringThesis: string | undefined;
+  howItWorks: string | null | undefined;
+} {
+  const ev = existing.evidence;
+  if (ev && typeof ev === 'object' && !Array.isArray(ev) && (ev as any).items) {
+    return {
+      evidence: (ev as any).items || [],
+      fileAnalyses: (ev as any).fileAnalyses || synthFallback.fileAnalyses || [],
+      checks: (ev as any).checks || synthFallback.checks || [],
+      checksSummary: (ev as any).checksSummary || synthFallback.checksSummary,
+      whatChanged: (ev as any).whatChanged || synthFallback.whatChanged || [],
+      engineeringThesis: (ev as any).engineeringThesis || synthFallback.engineeringThesis,
+      howItWorks: (ev as any).howItWorks !== undefined ? (ev as any).howItWorks : synthFallback.howItWorks,
+    };
+  }
+
+  return {
+    evidence: Array.isArray(ev) ? ev : synthFallback.evidence,
+    fileAnalyses: (existing as any).fileAnalyses || synthFallback.fileAnalyses || [],
+    checks: (existing as any).checks || synthFallback.checks || [],
+    checksSummary: (existing as any).checksSummary || synthFallback.checksSummary,
+    whatChanged: (existing as any).whatChanged || synthFallback.whatChanged || [],
+    engineeringThesis: (existing as any).engineeringThesis || synthFallback.engineeringThesis,
+    howItWorks: (existing as any).howItWorks || synthFallback.howItWorks,
+  };
+}
 
 /**
  * Gets existing case study analysis or creates/regenerates an evidence-backed analysis in the DB.
@@ -218,19 +279,26 @@ export async function getOrCreateCaseStudyAnalysis(contributionId: string): Prom
   // If existing analysis is UP TO DATE (modelVersion === CURRENT_CASE_STUDY_VERSION), return cached record
   if (existing && existing.modelVersion === CURRENT_CASE_STUDY_VERSION) {
     const synthFallback = synthesizeEvidenceAnalysis({ id: contributionId, issue: null, pullRequest: null });
+    const unpacked = unpackExtendedAnalysis(existing, synthFallback);
+
     return {
       id: existing.id,
       contributionId: existing.contributionId,
+      engineeringThesis: unpacked.engineeringThesis,
+      howItWorks: unpacked.howItWorks,
       problem: existing.problem,
       investigation: existing.investigation,
       approach: existing.approach,
-      whatChanged: (existing as any).whatChanged || synthFallback.whatChanged,
+      whatChanged: unpacked.whatChanged,
+      fileAnalyses: unpacked.fileAnalyses,
       techniques: existing.techniques,
       techniqueDetails: (existing as any).techniqueDetails || synthFallback.techniqueDetails,
+      checks: unpacked.checks,
+      checksSummary: unpacked.checksSummary,
       implementation: (existing.implementation as any) || [],
       tradeoffs: existing.tradeoffs,
       result: existing.result,
-      evidence: (existing.evidence as any) || [],
+      evidence: unpacked.evidence,
       confidence: (existing.confidence as any) || 'HIGH',
       analysisCoverage: ((existing as any).analysisCoverage as any) || 'FULL_DIFF',
       diffPatch: (existing as any).diffPatch || null,
@@ -243,7 +311,6 @@ export async function getOrCreateCaseStudyAnalysis(contributionId: string): Prom
   }
 
   // Otherwise, existing is missing OR stale (modelVersion !== CURRENT_CASE_STUDY_VERSION)!
-  // Fetch full contribution with issue and PR relations
   const contribution = await prisma.contribution.findUnique({
     where: { id: contributionId },
     include: {
@@ -255,19 +322,25 @@ export async function getOrCreateCaseStudyAnalysis(contributionId: string): Prom
   if (!contribution) {
     if (existing) {
       const synthFallback = synthesizeEvidenceAnalysis({ id: contributionId, issue: null, pullRequest: null });
+      const unpacked = unpackExtendedAnalysis(existing, synthFallback);
       return {
         id: existing.id,
         contributionId: existing.contributionId,
+        engineeringThesis: unpacked.engineeringThesis,
+        howItWorks: unpacked.howItWorks,
         problem: existing.problem,
         investigation: existing.investigation,
         approach: existing.approach,
-        whatChanged: (existing as any).whatChanged || synthFallback.whatChanged,
+        whatChanged: unpacked.whatChanged,
+        fileAnalyses: unpacked.fileAnalyses,
         techniques: existing.techniques,
         techniqueDetails: (existing as any).techniqueDetails || synthFallback.techniqueDetails,
+        checks: unpacked.checks,
+        checksSummary: unpacked.checksSummary,
         implementation: (existing.implementation as any) || [],
         tradeoffs: existing.tradeoffs,
         result: existing.result,
-        evidence: (existing.evidence as any) || [],
+        evidence: unpacked.evidence,
         confidence: (existing.confidence as any) || 'HIGH',
         analysisCoverage: ((existing as any).analysisCoverage as any) || 'FULL_DIFF',
         diffPatch: (existing as any).diffPatch || null,
@@ -281,7 +354,7 @@ export async function getOrCreateCaseStudyAnalysis(contributionId: string): Prom
     return null;
   }
 
-  // Try fetching real GitHub diff patch files server-side if PR info is available
+  // Try fetching real GitHub diff patch files & check runs server-side if PR info is available
   let diffData: GitHubPullRequestDiffData | null = null;
   const pr = contribution.pullRequest;
   const repo = pr?.repository || contribution.issue?.repository;
@@ -294,8 +367,9 @@ export async function getOrCreateCaseStudyAnalysis(contributionId: string): Prom
     }
   }
 
-  // Synthesize evidence analysis using diff data
+  // Synthesize evidence analysis using diff data & check runs
   const synthesized = synthesizeEvidenceAnalysis(contribution, diffData);
+  const evidencePayload = packExtendedEvidence(synthesized);
 
   // Upsert (Update existing stale analysis or create new record in DB)
   try {
@@ -309,7 +383,7 @@ export async function getOrCreateCaseStudyAnalysis(contributionId: string): Prom
         implementation: synthesized.implementation as any,
         tradeoffs: synthesized.tradeoffs,
         result: synthesized.result,
-        evidence: synthesized.evidence as any,
+        evidence: evidencePayload,
         confidence: synthesized.confidence,
         modelVersion: CURRENT_CASE_STUDY_VERSION,
       },
@@ -322,7 +396,7 @@ export async function getOrCreateCaseStudyAnalysis(contributionId: string): Prom
         implementation: synthesized.implementation as any,
         tradeoffs: synthesized.tradeoffs,
         result: synthesized.result,
-        evidence: synthesized.evidence as any,
+        evidence: evidencePayload,
         confidence: synthesized.confidence,
         modelVersion: CURRENT_CASE_STUDY_VERSION,
       },
@@ -331,16 +405,21 @@ export async function getOrCreateCaseStudyAnalysis(contributionId: string): Prom
     return {
       id: upserted.id,
       contributionId: upserted.contributionId,
+      engineeringThesis: synthesized.engineeringThesis,
+      howItWorks: synthesized.howItWorks,
       problem: upserted.problem,
       investigation: upserted.investigation,
       approach: upserted.approach,
-      whatChanged: synthesized.whatChanged,
+      whatChanged: synthesized.whatChanged || [],
+      fileAnalyses: synthesized.fileAnalyses || [],
       techniques: upserted.techniques,
-      techniqueDetails: synthesized.techniqueDetails,
+      techniqueDetails: synthesized.techniqueDetails || [],
+      checks: synthesized.checks || [],
+      checksSummary: synthesized.checksSummary,
       implementation: (upserted.implementation as any) || [],
       tradeoffs: upserted.tradeoffs,
       result: upserted.result,
-      evidence: (upserted.evidence as any) || [],
+      evidence: synthesized.evidence,
       confidence: (upserted.confidence as any) || 'HIGH',
       analysisCoverage: synthesized.analysisCoverage,
       diffPatch: synthesized.diffPatch,
@@ -355,12 +434,17 @@ export async function getOrCreateCaseStudyAnalysis(contributionId: string): Prom
     return {
       id: existing?.id || `synth-${contributionId}`,
       contributionId,
+      engineeringThesis: synthesized.engineeringThesis,
+      howItWorks: synthesized.howItWorks,
       problem: synthesized.problem,
       investigation: synthesized.investigation,
       approach: synthesized.approach,
-      whatChanged: synthesized.whatChanged,
+      whatChanged: synthesized.whatChanged || [],
+      fileAnalyses: synthesized.fileAnalyses || [],
       techniques: synthesized.techniques,
-      techniqueDetails: synthesized.techniqueDetails,
+      techniqueDetails: synthesized.techniqueDetails || [],
+      checks: synthesized.checks || [],
+      checksSummary: synthesized.checksSummary,
       implementation: synthesized.implementation as any,
       tradeoffs: synthesized.tradeoffs,
       result: synthesized.result,

@@ -325,19 +325,29 @@ export async function getContributionAnalytics(username: string): Promise<Contri
         caseStudyData = await getOrCreateCaseStudyAnalysis(contrib.id);
       } else {
         const synthAnalysis = synthesizeEvidenceAnalysis(contrib);
+        const evObj = contrib.analysis.evidence;
+        const unpackedEv = evObj && typeof evObj === 'object' && !Array.isArray(evObj) && (evObj as any).items
+          ? (evObj as any)
+          : null;
+
         caseStudyData = {
           id: contrib.analysis.id,
           contributionId: contrib.analysis.contributionId,
+          engineeringThesis: unpackedEv?.engineeringThesis || synthAnalysis.engineeringThesis,
+          howItWorks: unpackedEv?.howItWorks !== undefined ? unpackedEv.howItWorks : synthAnalysis.howItWorks,
           problem: contrib.analysis.problem,
           investigation: contrib.analysis.investigation,
           approach: contrib.analysis.approach,
-          whatChanged: (contrib.analysis as any).whatChanged || synthAnalysis.whatChanged,
+          whatChanged: unpackedEv?.whatChanged || (contrib.analysis as any).whatChanged || synthAnalysis.whatChanged,
+          fileAnalyses: unpackedEv?.fileAnalyses || synthAnalysis.fileAnalyses || [],
           techniques: contrib.analysis.techniques,
           techniqueDetails: (contrib.analysis as any).techniqueDetails || synthAnalysis.techniqueDetails,
+          checks: unpackedEv?.checks || synthAnalysis.checks || [],
+          checksSummary: unpackedEv?.checksSummary || synthAnalysis.checksSummary,
           implementation: (contrib.analysis.implementation as any) || synthAnalysis.implementation,
           tradeoffs: contrib.analysis.tradeoffs,
           result: contrib.analysis.result,
-          evidence: (contrib.analysis.evidence as any) || synthAnalysis.evidence,
+          evidence: unpackedEv?.items || (Array.isArray(evObj) ? evObj : synthAnalysis.evidence),
           confidence: (contrib.analysis.confidence as any) || 'HIGH',
           analysisCoverage: ((contrib.analysis as any).analysisCoverage as any) || synthAnalysis.analysisCoverage,
           diffPatch: (contrib.analysis as any).diffPatch || synthAnalysis.diffPatch,
@@ -421,19 +431,29 @@ export async function getContributionAnalytics(username: string): Promise<Contri
         caseStudyData = await getOrCreateCaseStudyAnalysis(c.id);
       } else {
         const synthAnalysis = synthesizeEvidenceAnalysis(c);
+        const evObj = c.analysis.evidence;
+        const unpackedEv = evObj && typeof evObj === 'object' && !Array.isArray(evObj) && (evObj as any).items
+          ? (evObj as any)
+          : null;
+
         caseStudyData = {
           id: c.analysis.id,
           contributionId: c.analysis.contributionId,
+          engineeringThesis: unpackedEv?.engineeringThesis || synthAnalysis.engineeringThesis,
+          howItWorks: unpackedEv?.howItWorks !== undefined ? unpackedEv.howItWorks : synthAnalysis.howItWorks,
           problem: c.analysis.problem,
           investigation: c.analysis.investigation,
           approach: c.analysis.approach,
-          whatChanged: (c.analysis as any).whatChanged || synthAnalysis.whatChanged,
+          whatChanged: unpackedEv?.whatChanged || (c.analysis as any).whatChanged || synthAnalysis.whatChanged,
+          fileAnalyses: unpackedEv?.fileAnalyses || synthAnalysis.fileAnalyses || [],
           techniques: c.analysis.techniques,
           techniqueDetails: (c.analysis as any).techniqueDetails || synthAnalysis.techniqueDetails,
+          checks: unpackedEv?.checks || synthAnalysis.checks || [],
+          checksSummary: unpackedEv?.checksSummary || synthAnalysis.checksSummary,
           implementation: (c.analysis.implementation as any) || synthAnalysis.implementation,
           tradeoffs: c.analysis.tradeoffs,
           result: c.analysis.result,
-          evidence: (c.analysis.evidence as any) || synthAnalysis.evidence,
+          evidence: unpackedEv?.items || (Array.isArray(evObj) ? evObj : synthAnalysis.evidence),
           confidence: (c.analysis.confidence as any) || 'HIGH',
           analysisCoverage: ((c.analysis as any).analysisCoverage as any) || synthAnalysis.analysisCoverage,
           diffPatch: (c.analysis as any).diffPatch || synthAnalysis.diffPatch,

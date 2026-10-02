@@ -716,10 +716,23 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                       </div>
                     </div>
 
-                    {/* EXPANDED VIEW: HIERARCHIZATION & EVIDENCE-FIRST (Requirement 14) */}
+                    {/* EXPANDED VIEW: HIERARCHIZATION & EVIDENCE-FIRST (v3.0.0 Hierarchy) */}
                     {isExpanded && (
                       <div className="border-t border-slate-800/80 p-6 md:p-8 space-y-8 bg-[#0a0e17] rounded-b-2xl font-sans">
-                        {/* 1. WHAT CHANGED (Requirement 5) */}
+                        {/* 1. ENGINEERING CHANGE THESIS */}
+                        {analysis?.engineeringThesis && (
+                          <div className="p-4 rounded-xl border border-emerald-900/60 bg-emerald-950/20 font-mono space-y-1">
+                            <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+                              <Terminal className="w-3.5 h-3.5" />
+                              <span>ENGINEERING CHANGE THESIS</span>
+                            </div>
+                            <div className="text-sm font-semibold text-emerald-200 leading-relaxed">
+                              {analysis.engineeringThesis}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 2. WHAT CHANGED */}
                         {factualBullets.length > 0 && (
                           <div className="space-y-3">
                             <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2 font-mono">
@@ -727,17 +740,50 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                               <span>WHAT CHANGED</span>
                             </h4>
                             <div className="p-4 rounded-xl border border-slate-800/90 bg-slate-950/60 space-y-2 text-sm text-slate-200 leading-relaxed">
-                              {factualBullets.map((b, i) => (
-                                <div key={i} className="flex items-start gap-2.5">
-                                  <span className="text-emerald-400 font-bold mt-1 text-xs">•</span>
-                                  <span>{b}</span>
-                                </div>
-                              ))}
+                              {(analysis?.whatChanged && analysis.whatChanged.length > 0 ? analysis.whatChanged : factualBullets.map(b => ({ statement: b, source: 'VERIFIED_DIFF', confidence: 'HIGH' }))).map((wItem: any, i: number) => {
+                                const statementText = typeof wItem === 'string' ? wItem : wItem.statement;
+                                const sourceTag = typeof wItem === 'object' && wItem.source ? wItem.source : 'VERIFIED_DIFF';
+                                const conf = typeof wItem === 'object' && wItem.confidence ? wItem.confidence : 'HIGH';
+
+                                return (
+                                  <div key={i} className="flex items-start justify-between gap-3 p-2 rounded-lg bg-slate-900/40 border border-slate-800/50">
+                                    <div className="flex items-start gap-2.5">
+                                      <span className="text-emerald-400 font-bold mt-1 text-xs">•</span>
+                                      <span>{statementText}</span>
+                                    </div>
+                                    <div className="shrink-0 flex items-center gap-1.5 font-mono text-[10px]">
+                                      <span className={`px-2 py-0.5 rounded border ${
+                                        sourceTag === 'VERIFIED_DIFF'
+                                          ? 'bg-emerald-950 text-emerald-300 border-emerald-800/60'
+                                          : 'bg-slate-900 text-slate-400 border-slate-700'
+                                      }`}>
+                                        {sourceTag}
+                                      </span>
+                                      <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">
+                                        {conf}
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         )}
 
-                        {/* 2. FILES CHANGED (Requirement 8 - Real line counts or filenames only, no fake diffs) */}
+                        {/* 3. HOW IT WORKS (ARCHITECTURE FLOW) */}
+                        {analysis?.howItWorks && (
+                          <div className="space-y-3 font-mono">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-purple-400 flex items-center gap-2">
+                              <Layers className="w-4 h-4 text-purple-400" />
+                              <span>HOW IT WORKS (IMPLEMENTATION FLOW)</span>
+                            </h4>
+                            <div className="p-4 rounded-xl border border-purple-900/50 bg-purple-950/20 text-xs text-purple-200 font-semibold flex items-center gap-2 overflow-x-auto">
+                              <span>{analysis.howItWorks}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 4. FILES CHANGED & COVERAGE */}
                         {item.filesChanged > 0 && (
                           <div className="space-y-3">
                             <div className="flex items-center justify-between">
@@ -745,31 +791,106 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                                 <FileCode className="w-4 h-4 text-cyan-400" />
                                 <span>FILES CHANGED</span>
                               </h4>
-                              <div className="text-[11px] font-mono text-slate-400">
-                                {(item.linesAdded > 0 || item.linesDeleted > 0) ? (
-                                  <>
-                                    <span className="text-emerald-400 font-bold">+{item.linesAdded}</span>{' '}
-                                    <span className="text-rose-400 font-bold">-{item.linesDeleted}</span> across{' '}
-                                  </>
-                                ) : null}
-                                <span className="text-slate-200 font-bold">{item.filesChanged} file(s)</span>
-                              </div>
-                            </div>
-                            <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/80 font-mono text-xs space-y-2 text-slate-300">
-                              <div className="flex items-center justify-between">
-                                <span className="font-semibold text-slate-200">GitHub Pull Request #{item.prNumber || 'merged'}</span>
-                                {(item.linesAdded > 0 || item.linesDeleted > 0) && (
-                                  <span className="text-[11px]">
-                                    <span className="text-emerald-400 font-bold">+{item.linesAdded}</span>{' '}
-                                    <span className="text-rose-400 font-bold">-{item.linesDeleted}</span>
+                              <div className="flex items-center gap-3 text-[11px] font-mono">
+                                {analysis?.analysisCoverage === 'PARTIAL_DIFF' && (
+                                  <span className="px-2 py-0.5 rounded bg-amber-950/80 border border-amber-800/60 text-amber-300 font-bold">
+                                    Analysis coverage: {analysis?.fileAnalyses?.length || item.filesChanged} of {item.filesChanged} files (PARTIAL_DIFF)
                                   </span>
                                 )}
+                                <div className="text-slate-400">
+                                  {(item.linesAdded > 0 || item.linesDeleted > 0) ? (
+                                    <>
+                                      <span className="text-emerald-400 font-bold">+{item.linesAdded}</span>{' '}
+                                      <span className="text-rose-400 font-bold">-{item.linesDeleted}</span> across{' '}
+                                    </>
+                                  ) : null}
+                                  <span className="text-slate-200 font-bold">{item.filesChanged} file(s)</span>
+                                </div>
                               </div>
                             </div>
+
+                            {analysis?.fileAnalyses && analysis.fileAnalyses.length > 0 ? (
+                              <div className="grid grid-cols-1 gap-2 font-mono text-xs">
+                                {analysis.fileAnalyses.map((fa: any, fIdx: number) => (
+                                  <div key={fIdx} className="p-3 rounded-xl border border-slate-800 bg-slate-950/80 space-y-1.5">
+                                    <div className="flex items-center justify-between text-slate-200 font-bold">
+                                      <div className="flex items-center gap-2 truncate">
+                                        <span className={`px-2 py-0.5 rounded text-[10px] uppercase ${
+                                          fa.status === 'added'
+                                            ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                                            : fa.status === 'removed'
+                                            ? 'bg-rose-950 text-rose-300 border border-rose-800'
+                                            : 'bg-blue-950 text-blue-300 border border-blue-800'
+                                        }`}>
+                                          {fa.status}
+                                        </span>
+                                        <span className="truncate">{fa.filename}</span>
+                                      </div>
+                                      <span className="text-[11px]">
+                                        <span className="text-emerald-400 font-bold">+{fa.additions}</span>{' '}
+                                        <span className="text-rose-400 font-bold">-{fa.deletions}</span>
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-slate-400 font-sans leading-relaxed">{fa.summary}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/80 font-mono text-xs space-y-2 text-slate-300">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-semibold text-slate-200">GitHub Pull Request #{item.prNumber || 'merged'}</span>
+                                  {(item.linesAdded > 0 || item.linesDeleted > 0) && (
+                                    <span className="text-[11px]">
+                                      <span className="text-emerald-400 font-bold">+{item.linesAdded}</span>{' '}
+                                      <span className="text-rose-400 font-bold">-{item.linesDeleted}</span>
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
 
-                        {/* 3. KEY IMPACT (Requirement 7) */}
+                        {/* 5. GITHUB CHECKS / CI VERIFICATION SECTION */}
+                        <div className="space-y-3 font-mono">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                            <span>GITHUB CHECKS & CI VERIFICATION</span>
+                          </h4>
+                          <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/80 space-y-3">
+                            <div className="text-xs text-slate-300 font-medium">
+                              {analysis?.checksSummary?.statusText || 'No GitHub checks reported for this pull request.'}
+                            </div>
+
+                            {analysis?.checks && analysis.checks.length > 0 && (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+                                {analysis.checks.map((chk: any, cIdx: number) => (
+                                  <div key={cIdx} className="p-2.5 rounded-lg border border-slate-800/80 bg-slate-900/60 flex items-center justify-between text-xs">
+                                    <span className="font-semibold text-slate-200 truncate">{chk.name}</span>
+                                    {chk.verified ? (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 text-[10px] font-bold">
+                                        <Check className="w-3 h-3" />
+                                        <span>Passed</span>
+                                      </span>
+                                    ) : chk.conclusion === 'failure' ? (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800 text-[10px] font-bold">
+                                        <X className="w-3 h-3" />
+                                        <span>Failed</span>
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800 text-[10px] font-bold">
+                                        <Clock className="w-3 h-3" />
+                                        <span>Pending</span>
+                                      </span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 6. KEY IMPACT */}
                         {impactText && (
                           <div className="space-y-3">
                             <h4 className="text-xs font-bold uppercase tracking-wider text-purple-400 flex items-center gap-2 font-mono">
@@ -782,7 +903,7 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                           </div>
                         )}
 
-                        {/* 4. ACTUAL BEFORE & AFTER (Requirement 6: ONLY rendered when real diff patch is present) */}
+                        {/* 7. ACTUAL BEFORE & AFTER (DIFF) */}
                         {item.diffPatch && item.diffPatch.before && item.diffPatch.after && (
                           <div className="space-y-3">
                             <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2 font-mono">
@@ -815,7 +936,7 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                           </div>
                         )}
 
-                        {/* 5. VERIFIED GITHUB EVIDENCE (Requirement 9 & 12) */}
+                        {/* 8. VERIFIED GITHUB EVIDENCE */}
                         <div className="space-y-3">
                           <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2 font-mono">
                             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -866,7 +987,7 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                               <Check className="w-4 h-4 text-emerald-400 shrink-0 ml-2 group-hover:scale-110 transition-transform" />
                             </a>
 
-                            {/* RR PointsLedger System Verification Badge (Requirement 9) */}
+                            {/* RR PointsLedger System Verification Badge */}
                             <div className="p-3.5 rounded-xl border border-emerald-900/40 bg-emerald-950/20 flex items-center justify-between text-xs">
                               <div className="space-y-0.5">
                                 <div className="text-[10px] font-bold text-emerald-400 uppercase">SYSTEM RECORD</div>
@@ -877,7 +998,7 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                           </div>
                         </div>
 
-                        {/* 6. PULL REQUEST & REPOSITORY DETAILS */}
+                        {/* 9. PULL REQUEST & REPOSITORY DETAILS */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-800/80 font-mono text-xs">
                           {/* PR Details */}
                           <div className="space-y-3 p-4 rounded-xl border border-slate-800 bg-slate-950/60">
@@ -938,16 +1059,16 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                           </div>
                         </div>
 
-                        {/* 7. AI ENGINEERING ANALYSIS (Requirement 12: Visually distinct from verified evidence) */}
+                        {/* 10. AI ENGINEERING ANALYSIS (Visually distinct from verified evidence) */}
                         {analysis && (
                           <div className="space-y-4 pt-4 border-t border-slate-800/80">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-purple-900/60 bg-purple-950/20 font-mono text-xs">
                               <div className="space-y-1">
                                 <div className="flex items-center gap-2">
                                   <Brain className="w-4 h-4 text-purple-400" />
-                                  <span className="font-bold text-purple-200">AI ENGINEERING ANALYSIS</span>
+                                  <span className="font-bold text-purple-200">AI ENGINEERING INTERPRETATION</span>
                                   <span className="px-2 py-0.5 rounded-md bg-purple-900/80 border border-purple-700/60 text-purple-300 font-bold text-[10px]">
-                                    AI Interpretation (Not GitHub Evidence)
+                                    AI interpretation — grounded in GitHub evidence
                                   </span>
                                 </div>
                                 <p className="text-[11px] text-purple-400/80">
@@ -975,11 +1096,25 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                                 <span className="font-bold text-slate-200 uppercase">Investigation Narrative: </span>
                                 <span>{analysis.investigation}</span>
                               </div>
+                              <div>
+                                <span className="font-bold text-slate-200 uppercase">Approach: </span>
+                                <span>{analysis.approach}</span>
+                              </div>
+                              {analysis.tradeoffs && analysis.tradeoffs.length > 0 && (
+                                <div>
+                                  <span className="font-bold text-slate-200 uppercase">Trade-offs: </span>
+                                  <span>{analysis.tradeoffs.join(' ')}</span>
+                                </div>
+                              )}
+                              <div>
+                                <span className="font-bold text-slate-200 uppercase">Verified Outcome: </span>
+                                <span>{analysis.result}</span>
+                              </div>
                             </div>
                           </div>
                         )}
 
-                        {/* 8. CONTRIBUTOR ROLE & REFLECTION */}
+                        {/* CONTRIBUTOR ROLE & REFLECTION */}
                         {analysis?.contributorLearned || isOwner ? (
                           <div className="space-y-3 pt-4 border-t border-slate-800/80">
                             <div className="flex items-center justify-between font-mono">
@@ -1034,12 +1169,15 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                           </div>
                         ) : null}
 
-                        {/* 9. RR SCORING PROVENANCE (Requirement 10) */}
+                        {/* RR AUDIT PROVENANCE */}
                         <div className="p-4 rounded-xl border border-amber-900/40 bg-amber-950/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono text-xs">
                           <div className="space-y-1">
-                            <div className="text-[10px] uppercase tracking-wider text-amber-400 font-bold">RR SCORING PROVENANCE</div>
+                            <div className="text-[10px] uppercase tracking-wider text-amber-400 font-bold">RR AUDIT PROVENANCE</div>
                             <div className="text-slate-300">
                               RR Difficulty: <strong className="text-amber-300">{item.rrDifficulty.toFixed(1)} / 10</strong> (Issue difficulty score) · Scoring Algorithm V2.3
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                              Note: RR scoring and point validity are authoritative and independent of AI engineering analysis.
                             </div>
                           </div>
                           <div className="flex items-center gap-3">
