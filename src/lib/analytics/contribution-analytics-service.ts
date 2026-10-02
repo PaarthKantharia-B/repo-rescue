@@ -198,33 +198,24 @@ function classifyContributionType(title: string, body: string | null, labels: st
 function classifyTechnicalArea(lang: string, eco: string, repoType: string, title: string): string {
   const text = `${lang} ${eco} ${repoType} ${title}`.toLowerCase();
 
-  if (text.includes('prisma') || text.includes('sql') || text.includes('postgres') || text.includes('db') || text.includes('mongo') || text.includes('redis')) {
-    return 'Database';
-  }
-  if (text.includes('docker') || text.includes('k8s') || text.includes('infra') || text.includes('terraform') || text.includes('aws')) {
-    return 'Infrastructure';
-  }
-  if (text.includes('react') || text.includes('next') || text.includes('vue') || text.includes('tailwind') || text.includes('css') || text.includes('frontend')) {
+  if (text.includes('react') || text.includes('next') || text.includes('vue') || text.includes('css') || text.includes('ui') || text.includes('frontend')) {
     return 'Frontend';
   }
-  if (text.includes('test') || text.includes('playwright')) {
-    return 'Testing';
+  if (text.includes('sql') || text.includes('postgres') || text.includes('mongo') || text.includes('prisma') || text.includes('db') || text.includes('database')) {
+    return 'Database';
+  }
+  if (text.includes('docker') || text.includes('k8s') || text.includes('action') || text.includes('infra') || text.includes('deploy')) {
+    return 'Infrastructure';
   }
   if (text.includes('security') || text.includes('auth')) {
     return 'Security';
   }
-  if (text.includes('ci') || text.includes('action') || text.includes('deploy')) {
-    return 'DevOps';
-  }
-  if (text.includes('perf') || text.includes('benchmark')) {
-    return 'Performance';
+  if (text.includes('test')) {
+    return 'Testing';
   }
   return 'Backend';
 }
 
-/**
- * Helper to compute median value of an array of numbers
- */
 function calculateMedian(numbers: number[]): number {
   if (numbers.length === 0) return 0;
   const sorted = [...numbers].sort((a, b) => a - b);
@@ -237,50 +228,80 @@ function calculateMedian(numbers: number[]): number {
 }
 
 /**
- * Core Service: Aggregates strict real database metrics for Contribution Analytics.
+ * Server-side service to aggregate contribution analytics strictly from verified database records.
  */
-export async function getContributionAnalytics(username: string): Promise<ContributionAnalyticsData | null> {
-  const user = await prisma.user.findFirst({
-    where: { githubUsername: { mode: 'insensitive', equals: username } },
-    include: {
-      pullRequests: {
-        include: {
-          repository: { include: { organization: true } },
-          issue: true,
-          contribution: {
-            include: {
-              analysis: true,
+export async function getContributionAnalytics(
+  username: string,
+  historyOverride?: ContributionHistoryItem[]
+): Promise<ContributionAnalyticsData | null> {
+  let user: any = null;
+  if (!historyOverride) {
+    user = await prisma.user.findFirst({
+      where: { githubUsername: { mode: 'insensitive', equals: username } },
+      include: {
+        pullRequests: {
+          include: {
+            issue: true,
+            repository: {
+              include: {
+                organization: true,
+              },
+            },
+            contribution: {
+              include: {
+                analysis: true,
+              },
             },
           },
+          orderBy: [
+            { mergedAt: 'desc' },
+            { closedAt: 'desc' },
+            { openedAt: 'desc' },
+            { createdAt: 'desc' },
+          ],
         },
-        orderBy: [
-          { mergedAt: 'desc' },
-          { closedAt: 'desc' },
-          { openedAt: 'desc' },
-          { createdAt: 'desc' },
-        ],
-      },
-      contributions: {
-        where: { status: 'MERGED_AND_AUDITED' },
-        include: {
-          issue: { include: { repository: { include: { organization: true } } } },
-          pullRequest: true,
-          analysis: true,
+        contributions: {
+          where: { status: 'MERGED_AND_AUDITED' },
+          include: {
+            issue: { include: { repository: { include: { organization: true } } } },
+            pullRequest: true,
+            analysis: true,
+          },
+          orderBy: { verifiedAt: 'desc' },
         },
-        orderBy: { verifiedAt: 'desc' },
+        ledgerEntries: { orderBy: { createdAt: 'desc' } },
       },
-      ledgerEntries: { orderBy: { createdAt: 'desc' } },
-    },
-  });
+    });
 
-  if (!user) return null;
+    if (!user) return null;
+  } else {
+    user = {
+      id: 'test-user',
+      name: username,
+      githubUsername: username,
+      image: '',
+      bio: null,
+      company: null,
+      location: null,
+      rrRating: 0,
+      contributorSyncStatus: 'SUCCESS',
+      lastSyncedAt: new Date(),
+      contributions: [],
+      pullRequests: [],
+      ledgerEntries: [],
+    };
+  }
 
-  const rawContribs = user.contributions;
-  const rawPullRequests = user.pullRequests || [];
-  const ledgerEntries = user.ledgerEntries;
+  let history: ContributionHistoryItem[] = [];
+  if (historyOverride) {
+    history = historyOverride;
+  } else {
+    const rawContribs = user.contributions;
+    const rawPullRequests = user.pullRequests || [];
+    const ledgerEntries = user.ledgerEntries;
 
-  // 1. Build Comprehensive History Items from PullRequests and Contributions
-  const historyMap = new Map<string, ContributionHistoryItem>();
+    // 1. Build Comprehensive History Items from PullRequests and Contributions
+    const historyMap = new Map<string, ContributionHistoryItem>();
 
   // Process all PullRequests first
   for (const pr of rawPullRequests) {
@@ -310,7 +331,7 @@ export async function getContributionAnalytics(username: string): Promise<Contri
       ? 'CLOSED'
       : 'OPEN';
 
-    const isAssigned = contrib?.wasAssigned || (issue?.assignees && user.githubUsername ? issue.assignees.map(a => a.toLowerCase()).includes(user.githubUsername.toLowerCase()) : false);
+    const isAssigned = contrib?.wasAssigned || (issue?.assignees && user.githubUsername ? issue.assignees.map((a: string) => a.toLowerCase()).includes(user.githubUsername.toLowerCase()) : false);
     const isPartnerOrg = contrib?.isPartner !== undefined ? contrib.isPartner : (repo.organizationId !== null);
 
     const techniques = isVerifiedMerged && contrib?.analysis?.techniques && contrib.analysis.techniques.length > 0
@@ -361,11 +382,6 @@ export async function getContributionAnalytics(username: string): Promise<Contri
     }
 
     const itemKey = contrib ? contrib.id : pr.id;
-    const rawDate = pr.mergedAt || contrib?.verifiedAt || pr.closedAt || pr.openedAt || pr.createdAt || new Date();
-
-    const formattedOpened = pr.openedAt ? new Date(pr.openedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
-    const formattedClosed = pr.closedAt ? new Date(pr.closedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
-    const formattedMerged = pr.mergedAt ? new Date(pr.mergedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : (pr.isMerged ? 'Merged' : null);
 
     historyMap.set(itemKey, {
       id: itemKey,
@@ -373,9 +389,9 @@ export async function getContributionAnalytics(username: string): Promise<Contri
       prNumber: actualPrNumber,
       prUrl: pr.url || repo.url,
       prStatus: prStatusStr,
-      openedAt: formattedOpened,
-      closedAt: formattedClosed,
-      mergedAt: formattedMerged,
+      openedAt: pr.openedAt ? new Date(pr.openedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null,
+      closedAt: pr.closedAt ? new Date(pr.closedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null,
+      mergedAt: pr.mergedAt ? new Date(pr.mergedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : (pr.isMerged ? 'Merged' : null),
 
       linkedIssueNumber,
       linkedIssueTitle,
@@ -392,7 +408,7 @@ export async function getContributionAnalytics(username: string): Promise<Contri
       orgAvatar: repo.organization?.avatarUrl ?? null,
       rrDifficulty: isVerifiedMerged && issue ? issue.rrDifficulty : 0,
       rrPoints: isVerifiedMerged && contrib ? contrib.rrPoints : 0,
-      verifiedAtRaw: new Date(rawDate),
+      verifiedAtRaw: new Date(pr.mergedAt || contrib?.verifiedAt || pr.closedAt || pr.openedAt || pr.createdAt || new Date()),
       status: contrib?.status || prStatusStr,
       approach: contrib?.approach ?? null,
       wasAssigned: isAssigned,
@@ -507,14 +523,36 @@ export async function getContributionAnalytics(username: string): Promise<Contri
     }
   }
 
-  const history = Array.from(historyMap.values()).sort(
-    (a, b) => b.verifiedAtRaw.getTime() - a.verifiedAtRaw.getTime()
-  );
+    history = Array.from(historyMap.values()).sort(
+      (a, b) => b.verifiedAtRaw.getTime() - a.verifiedAtRaw.getTime()
+    );
+  }
 
-  const verifiedMergedHistory = history.filter((h) => h.prStatus === 'MERGED' && h.rrPoints > 0);
+  // CRITICAL DATA INVARIANT:
+  // PullRequest != Contribution.
+  // Verified Engineering Work & DNA derive EXCLUSIVELY from authoritative verified Contribution records (status === 'MERGED_AND_AUDITED').
+  const verifiedMergedHistory = history.filter((h) => h.status === 'MERGED_AND_AUDITED');
   const totalVerifiedCount = verifiedMergedHistory.length;
+  const ledgerEntries = user.ledgerEntries || [];
+  const userTotalPoints = ledgerEntries.reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
 
-  if (history.length === 0 && ledgerEntries.length === 0) {
+  // Global benchmark defaults
+  const allContribs = await prisma.contribution.aggregate({
+    where: { status: 'MERGED_AND_AUDITED' },
+    _avg: { rrPoints: true },
+    _count: true,
+  });
+
+  const allIssues = await prisma.issue.aggregate({
+    _avg: { rrDifficulty: true },
+  });
+
+  const globalAvgRating = allIssues._avg.rrDifficulty ? Math.round((allIssues._avg.rrDifficulty * 0.85 + 1.5) * 10) / 10 : 7.2;
+  const globalAvgDifficulty = allIssues._avg.rrDifficulty ? Math.round(allIssues._avg.rrDifficulty * 10) / 10 : 5.8;
+
+  // ZERO-CONTRIBUTION STATE ENFORCEMENT (PHASE 4, 5, 9):
+  // If totalVerifiedCount === 0, ALL verified metrics and DNA MUST be empty / zeroed out.
+  if (totalVerifiedCount === 0) {
     return {
       user: {
         id: user.id,
@@ -524,7 +562,7 @@ export async function getContributionAnalytics(username: string): Promise<Contri
         bio: user.bio ?? undefined,
         company: user.company ?? undefined,
         location: user.location ?? undefined,
-        totalPoints: user.totalPoints,
+        totalPoints: userTotalPoints,
         rrRating: user.rrRating,
         rank: 0,
         verifiedContributionsCount: 0,
@@ -558,33 +596,33 @@ export async function getContributionAnalytics(username: string): Promise<Contri
       technologies: { languages: [], frameworks: [] },
       repoFootprint: [],
       impactCategories: [],
-      history: [],
+      history, // Includes discovered history for separate Discovered Activity section
       dnaSummary: {
-        primaryFocus: 'General Software Engineering',
-        secondaryFocus: 'Open Source Development',
-        typicalWork: ['Bug Fixes', 'Features'],
+        primaryFocus: 'No Verified Work',
+        secondaryFocus: 'No Verified Work',
+        typicalWork: [],
         difficultyRange: 'Unrated',
         reposCount: 0,
         contributionsCount: 0,
       },
       benchmark: {
         userAvgRating: 0,
-        globalAvgRating: 0,
+        globalAvgRating,
         userAvgDifficulty: 0,
-        globalAvgDifficulty: 0,
+        globalAvgDifficulty,
         userTotalContributions: 0,
-        globalMedianContributions: 0,
-        userTotalPoints: 0,
-        globalMedianPoints: 0,
+        globalMedianContributions: Math.max(1, Math.round(allContribs._count / 10)),
+        userTotalPoints,
+        globalMedianPoints: 120,
         hasEnoughData: false,
       },
-      hasData: false,
+      hasData: history.length > 0,
     };
   }
 
-  // 2. Repositories Footprint
+  // 2. Repositories Footprint (DERIVED STRICTLY FROM VERIFIED WORK ONLY)
   const repoMap = new Map<string, RepoFootprintItem>();
-  history.forEach((item) => {
+  verifiedMergedHistory.forEach((item) => {
     const existing = repoMap.get(item.repoFullName);
     if (existing) {
       existing.contributionCount++;
@@ -606,8 +644,8 @@ export async function getContributionAnalytics(username: string): Promise<Contri
   });
   const repoFootprint = Array.from(repoMap.values()).sort((a, b) => b.contributionCount - a.contributionCount);
 
-  // 3. Difficulty Distribution & Progression Insight
-  const diffs = history.map((h) => h.rrDifficulty);
+  // 3. Difficulty Distribution (DERIVED STRICTLY FROM VERIFIED WORK ONLY)
+  const diffs = verifiedMergedHistory.map((h) => h.rrDifficulty);
   const avgDifficulty = diffs.length ? Math.round((diffs.reduce((a, b) => a + b, 0) / diffs.length) * 10) / 10 : 0;
   const medianDifficulty = calculateMedian(diffs);
   const peakDifficulty = diffs.length ? Math.max(...diffs) : 0;
@@ -620,7 +658,6 @@ export async function getContributionAnalytics(username: string): Promise<Contri
   let trendInsight: string | null = null;
   if (diffs.length >= 3) {
     const half = Math.floor(diffs.length / 2);
-    // history is sorted desc by verifiedAt, so first half is recent, second half is older
     const recentAvg = diffs.slice(0, half).reduce((a, b) => a + b, 0) / half;
     const olderAvg = diffs.slice(half).reduce((a, b) => a + b, 0) / (diffs.length - half);
 
@@ -633,8 +670,7 @@ export async function getContributionAnalytics(username: string): Promise<Contri
     }
   }
 
-  // 4. RR Rating Analytics (Quality Scores)
-  // Derived strictly from composite difficulty + codebase complexity & audit metrics
+  // 4. Quality Analytics (DERIVED STRICTLY FROM VERIFIED WORK ONLY)
   const ratings = diffs.map((d) => Math.min(10.0, Math.round((d * 0.85 + 1.5) * 10) / 10));
   const avgRrRating = ratings.length ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10 : 0;
   const medianRating = calculateMedian(ratings);
@@ -642,11 +678,11 @@ export async function getContributionAnalytics(username: string): Promise<Contri
   const highlyRatedCount = ratings.filter((r) => r >= 7.5).length;
   const ratingTrend = [...ratings].reverse();
 
-  // 5. Contribution DNA: Categories & Technical Areas Breakdown
+  // 5. Contribution DNA: Categories & Technical Areas (DERIVED STRICTLY FROM VERIFIED WORK ONLY)
   const catCounts: Record<string, number> = {};
   const areaCounts: Record<string, number> = {};
 
-  history.forEach((h) => {
+  verifiedMergedHistory.forEach((h) => {
     catCounts[h.category] = (catCounts[h.category] || 0) + 1;
     areaCounts[h.area] = (areaCounts[h.area] || 0) + 1;
   });
@@ -659,12 +695,10 @@ export async function getContributionAnalytics(username: string): Promise<Contri
     .map(([name, count]) => ({ name, count, percentage: Math.round((count / totalVerifiedCount) * 100) }))
     .sort((a, b) => b.count - a.count);
 
-  // 6. Verified Capabilities (Technical Techniques & Areas Evidence Layer)
+  // 6. Verified Capabilities (DERIVED STRICTLY FROM VERIFIED WORK ONLY)
   const capabilityMap = new Map<string, VerifiedCapability>();
-  history.forEach((item) => {
-    // Add Area Capability
+  verifiedMergedHistory.forEach((item) => {
     const areaCapName = `${item.area} Engineering`;
-    // Add Technique Capabilities
     const techCapNames = item.techniques || [];
     const allCapNames = Array.from(new Set([areaCapName, ...techCapNames]));
 
@@ -703,9 +737,9 @@ export async function getContributionAnalytics(username: string): Promise<Contri
   });
   const capabilities = Array.from(capabilityMap.values()).sort((a, b) => b.count - a.count);
 
-  // 7. Technology Analytics (Languages & Tools)
+  // 7. Technology Analytics (DERIVED STRICTLY FROM VERIFIED WORK ONLY)
   const langCounts: Record<string, number> = {};
-  history.forEach((h) => {
+  verifiedMergedHistory.forEach((h) => {
     langCounts[h.language] = (langCounts[h.language] || 0) + 1;
   });
 
@@ -713,9 +747,8 @@ export async function getContributionAnalytics(username: string): Promise<Contri
     .map(([name, count]) => ({ name, count, percentage: Math.round((count / totalVerifiedCount) * 100) }))
     .sort((a, b) => b.count - a.count);
 
-  // Frameworks derived from eco & repoType
   const frameCounts: Record<string, number> = {};
-  history.forEach((h) => {
+  verifiedMergedHistory.forEach((h) => {
     const key = h.area;
     frameCounts[key] = (frameCounts[key] || 0) + 1;
   });
@@ -723,19 +756,21 @@ export async function getContributionAnalytics(username: string): Promise<Contri
     .map(([name, count]) => ({ name, count, percentage: Math.round((count / totalVerifiedCount) * 100) }))
     .sort((a, b) => b.count - a.count);
 
-  // 8. Impact Categories
+  // 8. Impact Categories (DERIVED STRICTLY FROM VERIFIED WORK ONLY)
   const impactMap: Record<string, number> = {};
-  history.forEach((h) => {
+  verifiedMergedHistory.forEach((h) => {
     impactMap[h.category] = (impactMap[h.category] || 0) + 1;
   });
   const impactCategories = Object.entries(impactMap)
     .map(([name, count]) => ({ name, count, percentage: Math.round((count / totalVerifiedCount) * 100) }))
     .sort((a, b) => b.count - a.count);
 
-  // 9. Time Series Aggregation for Activity Chart
+  // 9. Time Series Aggregation (DERIVED STRICTLY FROM VERIFIED WORK ONLY)
   const timeSeriesMap = new Map<string, TimeSeriesPoint>();
-  [...history].reverse().forEach((item) => {
-    const dateKey = new Date(item.verifiedAtRaw).toISOString().split('T')[0];
+  [...verifiedMergedHistory].reverse().forEach((item) => {
+    const rawDate = item.verifiedAtRaw ? new Date(item.verifiedAtRaw) : new Date();
+    const validDate = isNaN(rawDate.getTime()) ? new Date() : rawDate;
+    const dateKey = validDate.toISOString().split('T')[0];
     const existing = timeSeriesMap.get(dateKey);
     if (existing) {
       existing.contributions++;
@@ -758,7 +793,7 @@ export async function getContributionAnalytics(username: string): Promise<Contri
   const timeSeries = Array.from(timeSeriesMap.values()).sort((a, b) => a.timestamp - b.timestamp);
 
   // 10. Contribution DNA Summary
-  const primaryFocus = technicalAreas[0]?.name ? `${technicalAreas[0].name} Engineering` : 'Backend Engineering';
+  const primaryFocus = technicalAreas[0]?.name ? `${technicalAreas[0].name} Engineering` : 'General Engineering';
   const secondaryFocus = technicalAreas[1]?.name ? `${technicalAreas[1].name} Systems` : 'Software Engineering';
   const typicalWork = contributionTypes.slice(0, 3).map((t) => t.name);
 
@@ -766,23 +801,6 @@ export async function getContributionAnalytics(username: string): Promise<Contri
   if (avgDifficulty <= 3.5) difficultyRange = 'Easy → Moderate';
   else if (avgDifficulty <= 6.5) difficultyRange = 'Moderate → Hard';
   else difficultyRange = 'Hard → Very Hard';
-
-  // 11. Global Benchmark Comparison
-  // Query overall database stats to compare user against global community averages
-  const allContribs = await prisma.contribution.aggregate({
-    where: { status: 'MERGED_AND_AUDITED' },
-    _avg: { rrPoints: true },
-    _count: true,
-  });
-
-  const allIssues = await prisma.issue.aggregate({
-    _avg: { rrDifficulty: true },
-  });
-
-  const globalAvgRating = allIssues._avg.rrDifficulty ? Math.round((allIssues._avg.rrDifficulty * 0.85 + 1.5) * 10) / 10 : 7.2;
-  const globalAvgDifficulty = allIssues._avg.rrDifficulty ? Math.round(allIssues._avg.rrDifficulty * 10) / 10 : 5.8;
-
-  const userTotalPoints = ledgerEntries.reduce((sum, e) => sum + e.amount, 0);
 
   return {
     user: {
@@ -850,6 +868,6 @@ export async function getContributionAnalytics(username: string): Promise<Contri
       globalMedianPoints: 120,
       hasEnoughData: totalVerifiedCount > 0,
     },
-    hasData: totalVerifiedCount > 0,
+    hasData: history.length > 0,
   };
 }

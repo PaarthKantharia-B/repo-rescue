@@ -166,11 +166,11 @@ export async function syncContributorGithubActivity(
   const githubUsername = user.githubUsername;
   const now = new Date();
 
-  // 2. Concurrency Lock & Lease Check (Phase 12)
-  if (user.contributorSyncStatus === ContributorSyncStatus.RUNNING && user.syncStartedAt) {
-    const timeSinceStart = now.getTime() - new Date(user.syncStartedAt).getTime();
+  // 2. Concurrency Lock & Lease Check (Auto-expires stale RUNNING locks after 5 minutes)
+  if (user.contributorSyncStatus === ContributorSyncStatus.RUNNING) {
+    const timeSinceStart = user.syncStartedAt ? now.getTime() - new Date(user.syncStartedAt).getTime() : Infinity;
     if (timeSinceStart < 300000) {
-      // Lease duration: 5 minutes
+      // Lease duration: 5 minutes (300,000 ms)
       console.log(`[CONTRIBUTOR_SYNC] userId=${userId} githubUsername=@${githubUsername} status=SKIPPED (lease active)`);
       return {
         status: 'SKIPPED',
