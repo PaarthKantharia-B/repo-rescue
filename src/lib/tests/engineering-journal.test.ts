@@ -1,5 +1,5 @@
 import { CaseStudyAnalysisSchema } from '../ai/case-study-schema';
-import { synthesizeEvidenceAnalysis, extractEvidenceBasedTechniques } from '../ai/case-study-service';
+import { synthesizeEvidenceAnalysis } from '../ai/case-study-service';
 import { analyzePullRequestDiff, GitHubPullRequestDiffData } from '../ai/diff-analysis-engine';
 
 function runEngineeringJournalTests() {
@@ -17,7 +17,7 @@ function runEngineeringJournalTests() {
     }
   }
 
-  // Test 1: CaseStudyAnalysisSchema validation
+  // Schema Validation Tests
   try {
     const validData = CaseStudyAnalysisSchema.parse({
       problem: 'Redis connection pool exhaustion in backend',
@@ -35,7 +35,6 @@ function runEngineeringJournalTests() {
     assert(false, 'Valid case study analysis passes Zod schema validation');
   }
 
-  // Test 2: Invalid schema validation failure (empty problem string)
   try {
     CaseStudyAnalysisSchema.parse({
       problem: '',
@@ -48,7 +47,7 @@ function runEngineeringJournalTests() {
     assert(true, 'Schema rejects empty problem string');
   }
 
-  // 1. README-only change test
+  // 1. README-only PR test
   const readmeDiff: GitHubPullRequestDiffData = {
     files: [
       {
@@ -68,34 +67,36 @@ function runEngineeringJournalTests() {
   const readmeAnalysis = analyzePullRequestDiff(readmeDiff, 'docs: update setup', 101, 'owner/repo');
   assert(
     readmeAnalysis.whatChanged.some((w) => w.statement.includes('installation and environment setup instructions')) &&
-    readmeAnalysis.techniqueNames.includes('Documentation'),
-    'Test 1 (README): Analyzes README diff and identifies step-by-step setup instructions & Documentation technique'
+    readmeAnalysis.techniqueNames.includes('Technical Documentation'),
+    'Test 1 (README): Analyzes README diff and identifies step-by-step setup instructions & Technical Documentation technique'
   );
 
-  // 2. Syntax/formatting fix test
-  const formatDiff: GitHubPullRequestDiffData = {
+  // 2. Keyboard accessibility PR test
+  const kbDiff: GitHubPullRequestDiffData = {
     files: [
       {
-        filename: 'src/utils.ts',
+        filename: 'server/dashboard.html',
         status: 'modified',
-        additions: 1,
-        deletions: 1,
-        changes: 2,
-        patch: '@@ -10,1 +10,1 @@\n-const x = foo+bar\n+const x = foo + bar',
+        additions: 8,
+        deletions: 2,
+        changes: 10,
+        patch: '@@ -375,2 +375,8 @@\n-<tr onclick="showProject(this.dataset.name)">\n+<tr tabindex="0" onclick="showProject(this.dataset.name)" onkeydown="if(event.key===\'Enter\' || event.key===\' \') { event.preventDefault(); showProject(this.dataset.name); }">',
       },
     ],
     totalFiles: 1,
-    totalAdditions: 1,
-    totalDeletions: 1,
+    totalAdditions: 8,
+    totalDeletions: 2,
     coverage: 'FULL_DIFF',
   };
-  const formatAnalysis = analyzePullRequestDiff(formatDiff, 'fix spacing', 102, 'owner/repo');
+  const kbAnalysis = analyzePullRequestDiff(kbDiff, 'Make project rows accessible', 126, 'owner/repo');
   assert(
-    formatAnalysis.whatChanged.some((w) => w.statement.includes('operator')),
-    'Test 2 (Format): Detects expression formatting fix in code patch'
+    kbAnalysis.techniqueNames.includes('Keyboard Accessibility') &&
+    kbAnalysis.techniqueNames.includes('Event Handling') &&
+    kbAnalysis.approach.includes('tabindex'),
+    'Test 2 (Keyboard Accessibility): Detects tabindex and onkeydown event handling for Enter/Space key navigation'
   );
 
-  // 3. DOM manipulation test
+  // 3. DOM manipulation PR test
   const domDiff: GitHubPullRequestDiffData = {
     files: [
       {
@@ -118,7 +119,7 @@ function runEngineeringJournalTests() {
     'Test 3 (DOM): Identifies DOM Manipulation & Dynamic Rendering techniques from document.createElement'
   );
 
-  // 4. OOP class addition test
+  // 4. OOP PR test
   const oopDiff: GitHubPullRequestDiffData = {
     files: [
       {
@@ -141,7 +142,7 @@ function runEngineeringJournalTests() {
     'Test 4 (OOP): Detects Object-Oriented Programming & Encapsulation techniques from class definition'
   );
 
-  // 5. Inheritance test
+  // 5. Inheritance PR test
   const inheritDiff: GitHubPullRequestDiffData = {
     files: [
       {
@@ -164,30 +165,69 @@ function runEngineeringJournalTests() {
     'Test 5 (Inheritance): Detects Inheritance technique from class extends BaseService'
   );
 
-  // 6. Refactoring (Loop to Map) test
-  const refactorDiff: GitHubPullRequestDiffData = {
+  // 6. React state change / hook PR test
+  const reactDiff: GitHubPullRequestDiffData = {
     files: [
       {
-        filename: 'src/transform.ts',
+        filename: 'src/components/Counter.tsx',
         status: 'modified',
-        additions: 1,
-        deletions: 4,
-        changes: 5,
-        patch: '@@ -5,4 +5,1 @@\n-const res = [];\n-for (let i = 0; i < items.length; i++) {\n-  res.push(items[i].val);\n-}\n+const res = items.map(i => i.val);',
+        additions: 8,
+        deletions: 2,
+        changes: 10,
+        patch: '@@ -1,5 +1,11 @@\n+import { useState, useEffect } from "react";\n+const [count, setCount] = useState(0);\n+useEffect(() => {}, []);',
       },
     ],
     totalFiles: 1,
-    totalAdditions: 1,
-    totalDeletions: 4,
+    totalAdditions: 8,
+    totalDeletions: 2,
     coverage: 'FULL_DIFF',
   };
-  const refactorAnalysis = analyzePullRequestDiff(refactorDiff, 'clean loop', 106, 'owner/repo');
+  const reactAnalysis = analyzePullRequestDiff(reactDiff, 'add counter state', 106, 'owner/repo');
   assert(
-    refactorAnalysis.techniqueNames.includes('Refactoring') && refactorAnalysis.techniqueNames.includes('Functional Programming'),
-    'Test 6 (Refactoring): Detects Array.map() refactoring from explicit loop'
+    reactAnalysis.techniqueNames.includes('React Hooks') && reactAnalysis.techniqueNames.includes('State Management'),
+    'Test 6 (React Hooks): Identifies React Hooks & State Management techniques from useState/useEffect'
   );
 
-  // 7. Test addition test
+  // 7. API endpoint + frontend integration (multi-file synthesis) test
+  const apiIntegrationDiff: GitHubPullRequestDiffData = {
+    files: [
+      {
+        filename: 'src/app/api/users/route.ts',
+        status: 'added',
+        additions: 15,
+        deletions: 0,
+        changes: 15,
+        patch: '@@ -0,0 +1,15 @@\n+export async function GET() { return Response.json([]); }',
+      },
+      {
+        filename: 'src/components/UserList.tsx',
+        status: 'modified',
+        additions: 10,
+        deletions: 2,
+        changes: 12,
+        patch: '@@ -1,5 +1,13 @@\n+const [users, setUsers] = useState([]);\n+fetch("/api/users");',
+      },
+      {
+        filename: 'tests/users.test.ts',
+        status: 'added',
+        additions: 20,
+        deletions: 0,
+        changes: 20,
+        patch: '@@ -0,0 +1,20 @@\n+describe("Users API", () => { it("returns user list", () => {}); });',
+      },
+    ],
+    totalFiles: 3,
+    totalAdditions: 45,
+    totalDeletions: 2,
+    coverage: 'FULL_DIFF',
+  };
+  const apiIntegrationAnalysis = analyzePullRequestDiff(apiIntegrationDiff, 'add user api feature', 107, 'owner/repo');
+  assert(
+    apiIntegrationAnalysis.whatChanged.some((w) => w.statement.includes('API endpoint') && w.evidenceFiles.length >= 2),
+    'Test 7 (API Integration): Synthesizes API endpoint, frontend integration, and test coverage across files'
+  );
+
+  // 8. Test addition test
   const testDiff: GitHubPullRequestDiffData = {
     files: [
       {
@@ -204,13 +244,36 @@ function runEngineeringJournalTests() {
     totalDeletions: 0,
     coverage: 'FULL_DIFF',
   };
-  const testAnalysis = analyzePullRequestDiff(testDiff, 'add auth test', 107, 'owner/repo');
+  const testAnalysis = analyzePullRequestDiff(testDiff, 'add auth test', 108, 'owner/repo');
   assert(
     testAnalysis.techniqueNames.includes('Regression Testing'),
-    'Test 7 (Testing): Identifies Regression Testing technique from test addition'
+    'Test 8 (Regression Testing): Identifies Regression Testing technique from test file addition'
   );
 
-  // 8. Dependency change test
+  // 9. CI/CD workflow PR test
+  const cicdDiff: GitHubPullRequestDiffData = {
+    files: [
+      {
+        filename: '.github/workflows/release.yml',
+        status: 'added',
+        additions: 25,
+        deletions: 0,
+        changes: 25,
+        patch: '@@ -0,0 +1,25 @@\n+name: Release\n+on: release:\n+  types: [created]',
+      },
+    ],
+    totalFiles: 1,
+    totalAdditions: 25,
+    totalDeletions: 0,
+    coverage: 'FULL_DIFF',
+  };
+  const cicdAnalysis = analyzePullRequestDiff(cicdDiff, 'add release workflow', 109, 'owner/repo');
+  assert(
+    cicdAnalysis.techniqueNames.includes('CI/CD Automation') && cicdAnalysis.techniqueNames.includes('DevOps'),
+    'Test 9 (CI/CD Workflow): Identifies CI/CD Automation & DevOps techniques from GitHub Actions workflow'
+  );
+
+  // 10. Configuration change PR test
   const depDiff: GitHubPullRequestDiffData = {
     files: [
       {
@@ -227,13 +290,13 @@ function runEngineeringJournalTests() {
     totalDeletions: 1,
     coverage: 'FULL_DIFF',
   };
-  const depAnalysis = analyzePullRequestDiff(depDiff, 'bump zod', 108, 'owner/repo');
+  const depAnalysis = analyzePullRequestDiff(depDiff, 'bump zod', 110, 'owner/repo');
   assert(
     depAnalysis.techniqueNames.includes('Dependency Management'),
-    'Test 8 (Dependency): Identifies Dependency Management technique from package.json change'
+    'Test 10 (Dependency Management): Identifies Dependency Management technique from package.json update'
   );
 
-  // 9. PR title contradicts diff test (DIFF WINS!)
+  // 11. PR title contradicts diff test (DIFF WINS!)
   const contradictionDiff: GitHubPullRequestDiffData = {
     files: [
       {
@@ -250,21 +313,47 @@ function runEngineeringJournalTests() {
     totalDeletions: 0,
     coverage: 'FULL_DIFF',
   };
-  const contradictionAnalysis = analyzePullRequestDiff(contradictionDiff, 'Rewrite complete database architecture', 109, 'owner/repo');
+  const contradictionAnalysis = analyzePullRequestDiff(contradictionDiff, 'Rewrite complete database architecture', 111, 'owner/repo');
   assert(
     !contradictionAnalysis.whatChanged.some((w) => w.statement.includes('database')) &&
     contradictionAnalysis.whatChanged.some((w) => w.statement.includes('README.md')),
-    'Test 9 (Diff Wins): Ignores contradictory PR title "Rewrite database architecture" when actual diff is README.md'
+    'Test 11 (Diff Wins): Ignores contradictory PR title "Rewrite database architecture" when actual diff is README.md'
   );
 
-  // 10. Missing diff test (METADATA_ONLY)
-  const missingDiffAnalysis = analyzePullRequestDiff(null, 'Some PR', 110, 'owner/repo');
+  // 12. Multi-file PR test
+  const multiFileDiff: GitHubPullRequestDiffData = {
+    files: [
+      {
+        filename: 'server/dashboard.html',
+        status: 'modified',
+        additions: 5,
+        deletions: 1,
+        changes: 6,
+        patch: '@@ -1,1 +1,5 @@\n+<tr tabindex="0" onclick="showProject(this.dataset.name)" onkeydown="...">',
+      },
+      {
+        filename: '.jules/palette.md',
+        status: 'modified',
+        additions: 12,
+        deletions: 0,
+        changes: 12,
+        patch: '@@ -1,0 +1,12 @@\n+## Accessibility Guidelines\n+Keyboard navigation rules.',
+      },
+    ],
+    totalFiles: 2,
+    totalAdditions: 17,
+    totalDeletions: 1,
+    coverage: 'FULL_DIFF',
+  };
+  const multiFileAnalysis = analyzePullRequestDiff(multiFileDiff, 'accessibility enhancements', 112, 'owner/repo');
   assert(
-    missingDiffAnalysis.coverage === 'METADATA_ONLY' && missingDiffAnalysis.whatChanged.length === 1,
-    'Test 10 (Missing Diff): Sets coverage to METADATA_ONLY and avoids fabricating code implementation claims'
+    multiFileAnalysis.whatChanged.length >= 2 &&
+    multiFileAnalysis.whatChanged.some((w) => w.evidenceFiles.includes('server/dashboard.html')) &&
+    multiFileAnalysis.whatChanged.some((w) => w.evidenceFiles.includes('.jules/palette.md')),
+    'Test 12 (Multi-File PR): Analyzes both files in multi-file PR and includes statements for server/dashboard.html and .jules/palette.md'
   );
 
-  // 11. Large diff test (PARTIAL_DIFF)
+  // 13. Large PR test (PARTIAL_DIFF)
   const largeDiff: GitHubPullRequestDiffData = {
     files: Array.from({ length: 20 }, (_, i) => ({
       filename: `src/file_${i}.ts`,
@@ -279,13 +368,43 @@ function runEngineeringJournalTests() {
     totalDeletions: 100,
     coverage: 'PARTIAL_DIFF',
   };
-  const largeDiffAnalysis = analyzePullRequestDiff(largeDiff, 'Large refactor', 111, 'owner/repo');
+  const largeDiffAnalysis = analyzePullRequestDiff(largeDiff, 'Large refactor', 113, 'owner/repo');
   assert(
     largeDiffAnalysis.coverage === 'PARTIAL_DIFF',
-    'Test 11 (Large Diff): Accurately records PARTIAL_DIFF coverage for large diffs'
+    'Test 13 (Large PR): Accurately sets coverage to PARTIAL_DIFF for 20+ changed files'
   );
 
-  // 12. AI / Service Fallback test
+  // 14. Missing patch test
+  const missingPatchDiff: GitHubPullRequestDiffData = {
+    files: [
+      {
+        filename: 'src/binary_asset.png',
+        status: 'added',
+        additions: 0,
+        deletions: 0,
+        changes: 0,
+        patch: undefined,
+      },
+    ],
+    totalFiles: 1,
+    totalAdditions: 0,
+    totalDeletions: 0,
+    coverage: 'METADATA_ONLY',
+  };
+  const missingPatchAnalysis = analyzePullRequestDiff(missingPatchDiff, 'add binary asset', 114, 'owner/repo');
+  assert(
+    missingPatchAnalysis.diffPatch === null,
+    'Test 14 (Missing Patch): Does not fabricate Before/After code snippet when patch is missing'
+  );
+
+  // 15. GitHub API failure test (METADATA_ONLY)
+  const apiFailureAnalysis = analyzePullRequestDiff(null, 'API Failure PR', 115, 'owner/repo');
+  assert(
+    apiFailureAnalysis.coverage === 'METADATA_ONLY' && apiFailureAnalysis.whatChanged.length === 1,
+    'Test 15 (GitHub API Failure): Sets coverage to METADATA_ONLY and falls back to metadata statement without throwing errors'
+  );
+
+  // 16. AI / Synthesis Fallback test
   const synthFallback = synthesizeEvidenceAnalysis({
     id: 'contrib-fallback',
     pullRequest: { githubNumber: 999, title: 'Fallback PR' },
@@ -296,8 +415,8 @@ function runEngineeringJournalTests() {
     rrPoints: 50,
   });
   assert(
-    synthFallback.evidence.length >= 2,
-    'Test 12 (Fallback): Ensures contribution analysis synth fallback succeeds without throwing errors'
+    synthFallback.evidence.length >= 2 && synthFallback.confidence === 'HIGH',
+    'Test 16 (Synthesis Fallback): Fallback synthesis succeeds without throwing errors'
   );
 
   console.log(`\n📊 Test Results: ${passed} passed, ${failed} failed.`);

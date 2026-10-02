@@ -160,7 +160,15 @@ function deriveContributionTypeInfo(item: ContributionHistoryItem): Contribution
 function getFactualBullets(item: ContributionHistoryItem): string[] {
   const bullets: string[] = [];
 
-  if (item.approach && item.approach.trim().length > 10) {
+  if (item.analysis?.whatChanged && Array.isArray(item.analysis.whatChanged) && item.analysis.whatChanged.length > 0) {
+    for (const w of item.analysis.whatChanged) {
+      if (w.statement && w.statement.trim().length > 0) {
+        bullets.push(w.statement);
+      }
+    }
+  }
+
+  if (bullets.length === 0 && item.approach && item.approach.trim().length > 10) {
     const rawSentences = item.approach.split(/(?<=[.!?])\s+/);
     for (const s of rawSentences) {
       const clean = s.trim();
@@ -178,7 +186,7 @@ function getFactualBullets(item: ContributionHistoryItem): string[] {
     }
   }
 
-  return bullets.slice(0, 4);
+  return bullets.slice(0, 6);
 }
 
 /**
