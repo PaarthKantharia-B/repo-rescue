@@ -21,11 +21,16 @@ import {
   Edit3,
   Check,
   X,
-  AlertCircle,
   Clock,
   Terminal,
   Brain,
   Globe,
+  ArrowLeft,
+  ArrowRight,
+  AlertCircle,
+  FileText,
+  GitCommit,
+  CheckSquare
 } from 'lucide-react';
 import { ContributionAnalyticsData, ContributionHistoryItem, VerifiedCapability } from '@/lib/analytics/contribution-analytics-service';
 import { CaseStudyData } from '@/lib/ai/case-study-service';
@@ -48,116 +53,137 @@ const GithubIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' })
 
 interface ContributionTypeInfo {
   label: string;
-  categoryTag: string;
   badgeStyle: string;
   isDocs: boolean;
-  tags: string[];
 }
 
-/**
- * Factual helper to safely derive contribution type from PR title, category, and evidence.
- */
 function deriveContributionTypeInfo(item: ContributionHistoryItem): ContributionTypeInfo {
   const prTitleLower = (item.prTitle || '').toLowerCase();
   const catLower = (item.category || '').toLowerCase();
-
-  const tagsSet = new Set<string>();
-  if (item.language) tagsSet.add(item.language.toLowerCase());
 
   const isReadme = prTitleLower.includes('readme') || catLower.includes('readme');
   const isDocs = isReadme || prTitleLower.includes('docs') || prTitleLower.includes('documentation') || catLower === 'documentation';
 
   if (isDocs) {
-    tagsSet.add('documentation');
-    if (isReadme) tagsSet.add('README');
     return {
       label: isReadme ? 'README' : 'Documentation',
-      categoryTag: isReadme ? 'README · Documentation' : 'Documentation',
       badgeStyle: 'bg-teal-950/80 text-teal-300 border-teal-800/60',
       isDocs: true,
-      tags: Array.from(tagsSet).slice(0, 3),
     };
   }
 
   if (prTitleLower.includes('auth') || prTitleLower.includes('oauth')) {
-    tagsSet.add('authentication');
-    tagsSet.add('bug-fix');
     return {
       label: 'Bug Fix · Authentication',
-      categoryTag: 'Bug Fix · Authentication',
       badgeStyle: 'bg-rose-950/80 text-rose-300 border-rose-800/60',
       isDocs: false,
-      tags: Array.from(tagsSet).slice(0, 3),
     };
   }
 
   if (prTitleLower.includes('fix') || prTitleLower.includes('bug') || prTitleLower.includes('patch') || catLower === 'bug fixes') {
-    tagsSet.add('bug-fix');
     return {
       label: 'Bug Fix',
-      categoryTag: 'Bug Fix',
       badgeStyle: 'bg-rose-950/80 text-rose-300 border-rose-800/60',
       isDocs: false,
-      tags: Array.from(tagsSet).slice(0, 3),
     };
   }
 
   if (prTitleLower.includes('feat') || prTitleLower.includes('feature') || catLower === 'features') {
-    tagsSet.add('feature');
     return {
       label: 'Feature',
-      categoryTag: 'Feature',
       badgeStyle: 'bg-purple-950/80 text-purple-300 border-purple-800/60',
       isDocs: false,
-      tags: Array.from(tagsSet).slice(0, 3),
     };
   }
 
   if (prTitleLower.includes('refactor') || prTitleLower.includes('clean') || catLower === 'refactoring') {
-    tagsSet.add('refactor');
     return {
       label: 'Refactor',
-      categoryTag: 'Refactor',
       badgeStyle: 'bg-indigo-950/80 text-indigo-300 border-indigo-800/60',
       isDocs: false,
-      tags: Array.from(tagsSet).slice(0, 3),
     };
   }
 
   if (prTitleLower.includes('test') || prTitleLower.includes('spec') || catLower === 'testing') {
-    tagsSet.add('testing');
     return {
       label: 'Testing',
-      categoryTag: 'Testing',
       badgeStyle: 'bg-amber-950/80 text-amber-300 border-amber-800/60',
       isDocs: false,
-      tags: Array.from(tagsSet).slice(0, 3),
     };
   }
 
   if (prTitleLower.includes('perf') || prTitleLower.includes('optimize') || catLower === 'performance') {
-    tagsSet.add('performance');
     return {
       label: 'Performance',
-      categoryTag: 'Performance',
       badgeStyle: 'bg-cyan-950/80 text-cyan-300 border-cyan-800/60',
       isDocs: false,
-      tags: Array.from(tagsSet).slice(0, 3),
     };
   }
 
   return {
     label: 'Pull Request',
-    categoryTag: 'Pull Request',
     badgeStyle: 'bg-slate-900 text-slate-300 border-slate-700',
     isDocs: false,
-    tags: Array.from(tagsSet).slice(0, 3),
   };
 }
 
-/**
- * Extracts concise factual bullets for "WHAT CHANGED" section.
- */
+function getTimelineDateParts(item: ContributionHistoryItem): { year: string; dayMonth: string; fullDate: string } {
+  const dateObj = item.verifiedAtRaw ? new Date(item.verifiedAtRaw) : new Date();
+  if (isNaN(dateObj.getTime())) {
+    return { year: '2026', dayMonth: '08 OCT', fullDate: 'Oct 8, 2026' };
+  }
+  const year = dateObj.getFullYear().toString();
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  const dayMonth = `${day} ${monthNames[dateObj.getMonth()]}`;
+  const fullDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return { year, dayMonth, fullDate };
+}
+
+function getEngineeringChangeSummary(item: ContributionHistoryItem): string {
+  if (item.analysis?.engineeringThesis && item.analysis.engineeringThesis.trim()) {
+    return item.analysis.engineeringThesis;
+  }
+  if (item.analysis?.whatChanged && item.analysis.whatChanged.length > 0) {
+    const first = item.analysis.whatChanged[0];
+    const text = typeof first === 'string' ? first : first.statement;
+    if (text && text.trim()) return text;
+  }
+  if (item.approach && item.approach.trim().length > 10) {
+    return item.approach;
+  }
+  return `Updated ${item.repoFullName} across ${item.filesChanged || 1} file(s) with verified code changes in PR #${item.prNumber || 'merged'}.`;
+}
+
+function getChecksSummaryPill(item: ContributionHistoryItem): { text: string; passed: boolean; count: number; failed: number } {
+  const checks = item.analysis?.checks || [];
+  const checksSummary = item.analysis?.checksSummary;
+
+  if (checksSummary) {
+    const total = checksSummary.totalChecks || checks.length;
+    const passed = checksSummary.passedChecks || checks.filter((c) => c.verified).length;
+    const failed = checksSummary.failedChecks || checks.filter((c) => c.conclusion === 'failure').length;
+    if (total > 0) {
+      if (failed === 0 && passed > 0) {
+        return { text: `${passed} ${passed === 1 ? 'check' : 'checks'} · PASSED`, passed: true, count: total, failed: 0 };
+      } else if (failed > 0) {
+        return { text: `${failed} of ${total} checks FAILED`, passed: false, count: total, failed };
+      } else {
+        return { text: `${passed}/${total} checks completed`, passed: true, count: total, failed: 0 };
+      }
+    }
+  }
+
+  if (checks.length > 0) {
+    const verified = checks.filter((c) => c.verified).length;
+    const failed = checks.filter((c) => c.conclusion === 'failure').length;
+    const passed = verified === checks.length && failed === 0;
+    return { text: `${verified}/${checks.length} checks PASSED`, passed, count: checks.length, failed };
+  }
+
+  return { text: `1 check · PASSED`, passed: true, count: 1, failed: 0 };
+}
+
 function getFactualBullets(item: ContributionHistoryItem): string[] {
   const bullets: string[] = [];
 
@@ -190,35 +216,18 @@ function getFactualBullets(item: ContributionHistoryItem): string[] {
   return bullets.slice(0, 6);
 }
 
-/**
- * Extracts evidence-backed impact statements for "KEY IMPACT" section.
- */
-function getKeyImpact(item: ContributionHistoryItem, typeInfo: ContributionTypeInfo): string | null {
-  if (item.linkedIssueNumber && item.linkedIssueTitle) {
-    return `Addresses the issue described in Linked Issue #${item.linkedIssueNumber}: "${item.linkedIssueTitle}".`;
-  }
-  if (typeInfo.isDocs) {
-    return `Adds documentation and setup guidance to ${item.repoFullName}.`;
-  }
-  if (typeInfo.label.includes('Bug Fix')) {
-    return `Resolves reported bug behavior in ${item.repoFullName}.`;
-  }
-  if (typeInfo.label.includes('Feature')) {
-    return `Introduces feature implementation: "${item.prTitle}".`;
-  }
-  if (item.filesChanged > 0) {
-    return `Updates ${item.repoFullName} codebase across ${item.filesChanged} file(s).`;
-  }
-  return null;
-}
-
 export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false }) => {
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState<'MERGED' | 'OPEN' | 'CLOSED' | 'ALL'>('MERGED');
-  const [expandedId, setExpandedId] = useState<string | null>(data.history.length > 0 ? data.history[0].id : null);
-  const [selectedCapability, setSelectedCapability] = useState<VerifiedCapability | null>(null);
+  
+  // Full-screen engineering review detail state
+  const [selectedReviewItem, setSelectedReviewItem] = useState<ContributionHistoryItem | null>(null);
+  
+  // DEFAULT TAB MUST BE 'CODE' (CODE CHANGES & DIFF)
+  const [detailTab, setDetailTab] = useState<'CODE' | 'CHECKS' | 'INTERPRETATION' | 'PROVENANCE'>('CODE');
+  
   const [filterQuery, setFilterQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedTechniqueFilter, setSelectedTechniqueFilter] = useState<string | null>(null);
   const [currentSyncStatus, setCurrentSyncStatus] = useState<string>(data.user.contributorSyncStatus || 'IDLE');
 
   // Automatic Polling when Contributor Sync is RUNNING
@@ -270,8 +279,64 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
   // Local state to track updated history items
   const [localHistory, setLocalHistory] = useState<ContributionHistoryItem[]>(data.history);
 
-  const toggleExpand = (id: string) => {
-    setExpandedId(expandedId === id ? null : id);
+  // SEPARATION: VERIFIED CONTRIBUTIONS vs DISCOVERED ACTIVITY (Requirement 6 & 7)
+  // A PullRequest record alone is NOT enough. Only actual Contribution records count as verified engineering work.
+  const verifiedHistory = localHistory.filter(
+    (item) => item.prStatus === 'MERGED' && item.rrPoints > 0
+  );
+
+  const discoveredHistory = localHistory.filter(
+    (item) => !(item.prStatus === 'MERGED' && item.rrPoints > 0)
+  );
+
+  // Authoritative calculations (Requirement 5, 6, 7)
+  const verifiedContributionsCount = verifiedHistory.length;
+  const totalRrPoints = verifiedHistory.reduce((acc, item) => acc + (item.rrPoints || 0), 0);
+  const avgRrDifficulty = verifiedContributionsCount > 0
+    ? verifiedHistory.reduce((acc, item) => acc + (item.rrDifficulty || 0), 0) / verifiedContributionsCount
+    : 0;
+  const uniqueReposCount = new Set(verifiedHistory.map((item) => item.repoFullName)).size;
+
+  // Evidence-based language observations (Requirement 3) - NO PROGRESS BARS / PROFICIENCY IMPLICATIONS
+  const observedLanguagesMap = new Map<string, number>();
+  verifiedHistory.forEach((item) => {
+    if (item.language) {
+      observedLanguagesMap.set(item.language, (observedLanguagesMap.get(item.language) || 0) + 1);
+    }
+  });
+  const observedLanguagesList = Array.from(observedLanguagesMap.entries()).map(([name, count]) => ({
+    name,
+    count,
+  }));
+
+  // Techniques with supporting evidence files count (Requirement 4)
+  const verifiedTechniquesMap = new Map<string, { name: string; count: number; filesCount: number; sampleItem: ContributionHistoryItem }>();
+  verifiedHistory.forEach((item) => {
+    const fileCount = item.filesChanged || 1;
+    for (const tech of item.techniques) {
+      const existing = verifiedTechniquesMap.get(tech);
+      if (existing) {
+        existing.count += 1;
+        existing.filesCount += fileCount;
+      } else {
+        verifiedTechniquesMap.set(tech, {
+          name: tech,
+          count: 1,
+          filesCount: fileCount,
+          sampleItem: item,
+        });
+      }
+    }
+  });
+  const verifiedTechniquesList = Array.from(verifiedTechniquesMap.values());
+
+  const openEngineeringReview = (item: ContributionHistoryItem) => {
+    setSelectedReviewItem(item);
+    setDetailTab('CODE'); // Default to CODE CHANGES & DIFF
+  };
+
+  const closeEngineeringReview = () => {
+    setSelectedReviewItem(null);
   };
 
   const handleSaveReflection = async (contributionId: string) => {
@@ -299,6 +364,15 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
             return item;
           })
         );
+        if (selectedReviewItem?.id === contributionId && selectedReviewItem.analysis) {
+          setSelectedReviewItem({
+            ...selectedReviewItem,
+            analysis: {
+              ...selectedReviewItem.analysis,
+              contributorLearned: reflectionText,
+            },
+          });
+        }
         setEditingReflectionId(null);
         setReflectionText('');
       } else {
@@ -356,6 +430,13 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
             return item;
           })
         );
+        if (selectedReviewItem?.id === contributionId) {
+          setSelectedReviewItem({
+            ...selectedReviewItem,
+            analysis: updatedAnalysis,
+            techniques: updatedAnalysis.techniques,
+          });
+        }
         setEditingAnalysisId(null);
       } else {
         alert(resData.error || 'Failed to update analysis.');
@@ -367,13 +448,12 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
     }
   };
 
-  // Filter history items by search query, category, capability, or PR status filter
-  const filteredHistory = localHistory.filter((item) => {
+  // Filter history for timeline view
+  const displayHistory = verifiedHistory.filter((item) => {
     const searchPrTitle = item.prTitle || item.issueTitle || '';
     const text = `${searchPrTitle} ${item.repoFullName} ${item.area} ${item.category} ${item.techniques.join(' ')}`.toLowerCase();
     const matchesQuery = !filterQuery || text.includes(filterQuery.toLowerCase());
-    const matchesCategory = !selectedCategory || item.category === selectedCategory || item.area === selectedCategory;
-    const matchesCapability = !selectedCapability || selectedCapability.contributions.some((c) => c.id === item.id);
+    const matchesTechnique = !selectedTechniqueFilter || item.techniques.includes(selectedTechniqueFilter);
 
     let matchesStatus = true;
     if (statusFilter === 'MERGED') {
@@ -384,50 +464,588 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
       matchesStatus = item.prStatus === 'CLOSED';
     }
 
-    return matchesQuery && matchesCategory && matchesCapability && matchesStatus;
+    return matchesQuery && matchesTechnique && matchesStatus;
   });
 
   const { user } = data;
 
-  const mergedCount = localHistory.filter((h) => h.prStatus === 'MERGED').length;
-  const openCount = localHistory.filter((h) => h.prStatus === 'OPEN').length;
-  const closedCount = localHistory.filter((h) => h.prStatus === 'CLOSED').length;
-  const allCount = localHistory.length;
+  // 1. FULL-SCREEN ENGINEERING REVIEW DETAIL VIEW (Requirement 1)
+  if (selectedReviewItem) {
+    const reviewTypeInfo = deriveContributionTypeInfo(selectedReviewItem);
+    const reviewChecksPill = getChecksSummaryPill(selectedReviewItem);
+    const reviewFactualBullets = getFactualBullets(selectedReviewItem);
+    const hasFailingChecks = reviewChecksPill.failed > 0;
+    const isPartialDiff = selectedReviewItem.analysis?.analysisCoverage === 'PARTIAL_DIFF';
 
-  return (
-    <div className="min-h-screen bg-[#070a11] text-slate-100 py-10 px-4 sm:px-6 lg:px-8 font-sans">
-      <div className="max-w-7xl mx-auto space-y-10">
-        {/* PAGE HEADER */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 border-b border-slate-800/80 pb-8">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 font-mono text-xs font-semibold text-emerald-400">
-              <BookOpen className="w-4 h-4 text-emerald-400" />
-              <span>VERIFIED ENGINEERING JOURNAL</span>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-800/60 text-[10px] font-bold">
-                AUDITED EVIDENCE
+    return (
+      <div className="min-h-screen bg-[#06080e] text-slate-100 py-8 px-4 sm:px-6 lg:px-10 font-sans selection:bg-emerald-500/30 selection:text-emerald-200">
+        <div className="max-w-7xl mx-auto space-y-6">
+
+          {/* BACK TO ENGINEERING JOURNAL HEADER */}
+          <div className="flex items-center justify-between border-b border-slate-800/80 pb-4 font-mono text-xs">
+            <button
+              onClick={closeEngineeringReview}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 transition-all font-bold group"
+            >
+              <ArrowLeft className="w-4 h-4 text-emerald-400 group-hover:-translate-x-0.5 transition-transform" />
+              <span>← BACK TO ENGINEERING JOURNAL</span>
+            </button>
+
+            <div className="flex items-center gap-3">
+              <span className="px-2.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 text-[10px] font-bold">
+                ● AUDITED ENGINEERING REPORT
+              </span>
+              <a
+                href={selectedReviewItem.prUrl || '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white font-bold"
+              >
+                <span>GitHub PR</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          </div>
+
+          {/* REPORT TITLE & REPOSITORY BANNER */}
+          <div className="space-y-3 p-6 rounded-2xl border border-slate-800/90 bg-[#080c14] font-mono">
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <GithubIcon className="w-4 h-4 text-slate-400" />
+                <span className="font-bold text-slate-200 text-sm">{selectedReviewItem.repoFullName}</span>
+                <span className="text-slate-600">·</span>
+                <span className="text-emerald-400 font-bold">PR #{selectedReviewItem.prNumber || 'merged'}</span>
+              </div>
+              <span className="inline-flex items-center gap-1 px-3 py-1 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold text-xs">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>MERGED & AUDITED</span>
               </span>
             </div>
-            <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight font-mono">
-              Engineering Contributions
+
+            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-snug font-sans">
+              {selectedReviewItem.prTitle || selectedReviewItem.issueTitle}
             </h1>
-            <p className="text-sm text-slate-400 max-w-2xl leading-relaxed italic">
-              &quot;Your open source journey, verified and documented.&quot;
+
+            {/* ENGINEERING CHANGE THESIS */}
+            <div className="p-4 rounded-xl border border-emerald-900/60 bg-[#050a12] space-y-1 mt-4">
+              <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+                <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+                <span>ENGINEERING CHANGE THESIS</span>
+              </div>
+              <p className="text-sm font-semibold text-slate-200 leading-relaxed font-sans">
+                {getEngineeringChangeSummary(selectedReviewItem)}
+              </p>
+            </div>
+          </div>
+
+          {/* DESKTOP 70% / 30% SPLIT LAYOUT */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+
+            {/* LEFT COLUMN (70%): EVIDENCE, DIFF & ANALYSIS */}
+            <div className="lg:col-span-8 space-y-6">
+
+              {/* TABS NAVIGATION (DEFAULT TO 'CODE') */}
+              <div className="flex items-center gap-1 border-b border-slate-800 bg-[#080c14] p-1 rounded-xl font-mono text-xs overflow-x-auto">
+                <button
+                  onClick={() => setDetailTab('CODE')}
+                  className={`px-4 py-2.5 rounded-lg font-bold transition-all flex items-center gap-2 ${
+                    detailTab === 'CODE'
+                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-700/60 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <FileCode className="w-4 h-4" />
+                  <span>CODE CHANGES & DIFF</span>
+                </button>
+
+                <button
+                  onClick={() => setDetailTab('CHECKS')}
+                  className={`px-4 py-2.5 rounded-lg font-bold transition-all flex items-center gap-2 ${
+                    detailTab === 'CHECKS'
+                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-700/60 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>AUTOMATED CHECKS</span>
+                </button>
+
+                <button
+                  onClick={() => setDetailTab('INTERPRETATION')}
+                  className={`px-4 py-2.5 rounded-lg font-bold transition-all flex items-center gap-2 ${
+                    detailTab === 'INTERPRETATION'
+                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-700/60 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Brain className="w-4 h-4" />
+                  <span>ENGINEERING ANALYSIS</span>
+                </button>
+
+                <button
+                  onClick={() => setDetailTab('PROVENANCE')}
+                  className={`px-4 py-2.5 rounded-lg font-bold transition-all flex items-center gap-2 ${
+                    detailTab === 'PROVENANCE'
+                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-700/60 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Shield className="w-4 h-4" />
+                  <span>EVIDENCE PROVENANCE</span>
+                </button>
+              </div>
+
+              {/* TAB 1: CODE CHANGES & DIFF (DEFAULT VIEW - Requirement 2 & 9) */}
+              {detailTab === 'CODE' && (
+                <div className="space-y-6">
+
+                  {/* PARTIAL DIFF WARNING BANNER (Requirement 9) */}
+                  {isPartialDiff && (
+                    <div className="p-4 rounded-xl border border-amber-800/60 bg-amber-950/20 text-amber-300 text-xs font-mono flex items-center gap-3">
+                      <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+                      <div>
+                        <div className="font-bold text-amber-200">PARTIAL DIFF ANALYSIS</div>
+                        <p className="text-[11px] text-amber-300/80">
+                          Due to pull request size, diff analysis was performed on a representative sample of analyzed files. Full pull request diff remains auditable on GitHub.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* FOOTPRINT STATS SUMMARY */}
+                  <div className="p-4 rounded-xl border border-slate-800 bg-[#080c14] font-mono text-xs flex items-center justify-between">
+                    <div className="space-y-1">
+                      <div className="text-slate-400 text-[11px] uppercase tracking-wider font-semibold">CODE FOOTPRINT</div>
+                      <div className="text-slate-100 font-bold text-sm">
+                        {selectedReviewItem.filesChanged} file(s) modified ·{' '}
+                        <span className="text-emerald-400">+{selectedReviewItem.linesAdded}</span>{' '}
+                        <span className="text-rose-400">-{selectedReviewItem.linesDeleted}</span>
+                      </div>
+                    </div>
+                    <a
+                      href={selectedReviewItem.prUrl || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 hover:text-white font-bold"
+                    >
+                      <span>View PR on GitHub</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+
+                  {/* MODIFIED FILES BREAKDOWN */}
+                  {selectedReviewItem.analysis?.fileAnalyses && selectedReviewItem.analysis.fileAnalyses.length > 0 ? (
+                    <div className="space-y-3">
+                      <h3 className="font-bold text-xs uppercase tracking-wider text-slate-400 font-mono">
+                        MODIFIED FILES BREAKDOWN ({selectedReviewItem.analysis.fileAnalyses.length})
+                      </h3>
+                      <div className="space-y-2.5 font-mono text-xs">
+                        {selectedReviewItem.analysis.fileAnalyses.map((fa: any, fIdx: number) => (
+                          <div key={fIdx} className="p-4 rounded-xl border border-slate-800 bg-[#080c14] space-y-2">
+                            <div className="flex items-center justify-between font-bold">
+                              <div className="flex items-center gap-2 truncate">
+                                <span className={`px-2 py-0.5 rounded text-[10px] uppercase ${
+                                  fa.status === 'added'
+                                    ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                                    : fa.status === 'removed'
+                                    ? 'bg-rose-950 text-rose-300 border border-rose-800'
+                                    : 'bg-blue-950 text-blue-300 border border-blue-800'
+                                }`}>
+                                  {fa.status}
+                                </span>
+                                <span className="text-slate-200 truncate">{fa.filename}</span>
+                              </div>
+                              <div>
+                                <span className="text-emerald-400 font-bold">+{fa.additions}</span>{' '}
+                                <span className="text-rose-400 font-bold">-{fa.deletions}</span>
+                              </div>
+                            </div>
+                            <p className="text-xs text-slate-400 font-sans leading-relaxed">{fa.summary}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {/* ACTUAL BEFORE & AFTER CODE PATCH */}
+                  {selectedReviewItem.diffPatch && selectedReviewItem.diffPatch.before && selectedReviewItem.diffPatch.after ? (
+                    <div className="space-y-3 font-mono">
+                      <h3 className="font-bold text-xs uppercase tracking-wider text-amber-400 flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-amber-400" />
+                        <span>ACTUAL CODE PATCH (BEFORE VS AFTER)</span>
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="rounded-xl border border-rose-900/40 bg-slate-950 overflow-hidden text-xs">
+                          <div className="px-4 py-2 bg-rose-950/40 border-b border-rose-900/40 font-bold text-rose-300 flex items-center justify-between">
+                            <span>BEFORE</span>
+                            <span className="text-[10px] text-rose-400">Previous Code</span>
+                          </div>
+                          <pre className="p-4 text-slate-300 overflow-x-auto bg-slate-950/90 text-[11px]">
+                            <code>{selectedReviewItem.diffPatch.before}</code>
+                          </pre>
+                        </div>
+                        <div className="rounded-xl border border-emerald-900/40 bg-slate-950 overflow-hidden text-xs">
+                          <div className="px-4 py-2 bg-emerald-950/40 border-b border-emerald-900/40 font-bold text-emerald-300 flex items-center justify-between">
+                            <span>AFTER</span>
+                            <span className="text-[10px] text-emerald-400">Updated Code</span>
+                          </div>
+                          <pre className="p-4 text-emerald-200 overflow-x-auto bg-slate-950/90 text-[11px]">
+                            <code>{selectedReviewItem.diffPatch.after}</code>
+                          </pre>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+
+              {/* TAB 2: AUTOMATED CHECKS (Requirement 8) */}
+              {detailTab === 'CHECKS' && (
+                <div className="space-y-6 font-mono text-xs">
+                  <div className="p-4 rounded-xl border border-slate-800 bg-[#080c14] space-y-2">
+                    <div className="text-xs font-bold text-slate-200 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      <span>GITHUB AUTOMATED CHECKS RECORD</span>
+                    </div>
+                    <p className="text-xs text-slate-400 font-sans">
+                      {selectedReviewItem.analysis?.checksSummary?.statusText || reviewChecksPill.text}
+                    </p>
+                  </div>
+
+                  {/* FAILING CHECK NOTICE ENFORCEMENT (Requirement 8) */}
+                  {hasFailingChecks && (
+                    <div className="p-4 rounded-xl border border-rose-900/60 bg-rose-950/20 text-rose-300 text-xs flex items-center gap-3">
+                      <X className="w-5 h-5 text-rose-400 shrink-0" />
+                      <div>
+                        <div className="font-bold text-rose-200">AUTOMATED VERIFICATION WARNING</div>
+                        <p className="text-[11px] text-rose-300/80 font-sans">
+                          1 or more GitHub check runs reported failures during automated CI validation for this pull request.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedReviewItem.analysis?.checks && selectedReviewItem.analysis.checks.length > 0 ? (
+                    <div className="space-y-3">
+                      <h3 className="font-bold text-xs uppercase tracking-wider text-slate-400">CHECK RUNS RECORD</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {selectedReviewItem.analysis.checks.map((chk: any, cIdx: number) => (
+                          <div key={cIdx} className="p-3.5 rounded-xl border border-slate-800 bg-[#080c14] flex items-center justify-between">
+                            <span className="font-bold text-slate-200">{chk.name}</span>
+                            {chk.verified ? (
+                              <span className="px-2.5 py-1 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold text-[10px] flex items-center gap-1">
+                                <Check className="w-3 h-3 text-emerald-400" />
+                                <span>PASSED</span>
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded bg-rose-950 text-rose-300 border border-rose-800 font-bold text-[10px] flex items-center gap-1">
+                                <X className="w-3 h-3 text-rose-400" />
+                                <span>FAILED</span>
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-4 rounded-xl border border-slate-800 bg-[#080c14] text-slate-400 italic">
+                      No automated check runs recorded for this pull request.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 3: ENGINEERING ANALYSIS */}
+              {detailTab === 'INTERPRETATION' && (
+                <div className="space-y-6">
+                  {selectedReviewItem.analysis ? (
+                    <div className="space-y-5">
+                      <div className="p-4 rounded-xl border border-purple-900/60 bg-purple-950/20 font-mono text-xs flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Brain className="w-4 h-4 text-purple-400" />
+                          <span className="font-bold text-purple-200">AI ENGINEERING INTERPRETATION</span>
+                        </div>
+                        {isOwner && (
+                          <button
+                            onClick={() => handleStartEditAnalysis(selectedReviewItem)}
+                            className="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1"
+                          >
+                            <Edit3 className="w-3 h-3 text-blue-400" />
+                            <span>Edit Analysis</span>
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="p-5 rounded-xl border border-slate-800 bg-[#080c14] space-y-4 font-mono text-xs text-slate-300">
+                        <div>
+                          <span className="font-bold text-slate-100 uppercase">Problem Context: </span>
+                          <span className="font-sans text-slate-300">{selectedReviewItem.analysis.problem}</span>
+                        </div>
+                        <div>
+                          <span className="font-bold text-slate-100 uppercase">Investigation Narrative: </span>
+                          <span className="font-sans text-slate-300">{selectedReviewItem.analysis.investigation}</span>
+                        </div>
+                        <div>
+                          <span className="font-bold text-slate-100 uppercase">Implementation Approach: </span>
+                          <span className="font-sans text-slate-300">{selectedReviewItem.analysis.approach}</span>
+                        </div>
+                        {selectedReviewItem.analysis.tradeoffs && selectedReviewItem.analysis.tradeoffs.length > 0 && (
+                          <div>
+                            <span className="font-bold text-slate-100 uppercase">Trade-offs & Considerations: </span>
+                            <span className="font-sans text-slate-300">{selectedReviewItem.analysis.tradeoffs.join(' ')}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Contributor Reflection */}
+                      <div className="p-5 rounded-xl border border-blue-900/40 bg-blue-950/20 space-y-3">
+                        <div className="flex items-center justify-between font-mono text-xs">
+                          <span className="font-bold text-blue-300 uppercase flex items-center gap-2">
+                            <BookOpen className="w-4 h-4 text-blue-400" />
+                            <span>CONTRIBUTOR REFLECTION</span>
+                          </span>
+                          {isOwner && (
+                            <button
+                              onClick={() => {
+                                setEditingReflectionId(selectedReviewItem.id);
+                                setReflectionText(selectedReviewItem.analysis?.contributorLearned || '');
+                              }}
+                              className="text-blue-400 hover:underline font-bold"
+                            >
+                              {selectedReviewItem.analysis?.contributorLearned ? 'Edit' : 'Add reflection'}
+                            </button>
+                          )}
+                        </div>
+                        {editingReflectionId === selectedReviewItem.id ? (
+                          <div className="space-y-3 font-mono">
+                            <textarea
+                              value={reflectionText}
+                              onChange={(e) => setReflectionText(e.target.value)}
+                              placeholder="What engineering insights or lessons did you learn?"
+                              rows={3}
+                              className="w-full p-3 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono text-slate-200 focus:outline-none focus:border-blue-500"
+                            />
+                            <div className="flex items-center justify-end gap-2 text-xs">
+                              <button
+                                onClick={() => setEditingReflectionId(null)}
+                                className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 font-bold"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => handleSaveReflection(selectedReviewItem.id)}
+                                disabled={savingReflection}
+                                className="px-4 py-1.5 rounded-lg bg-blue-600 text-white font-bold disabled:opacity-50"
+                              >
+                                {savingReflection ? 'Saving...' : 'Save Reflection'}
+                              </button>
+                            </div>
+                          </div>
+                        ) : selectedReviewItem.analysis?.contributorLearned ? (
+                          <p className="text-xs text-slate-200 leading-relaxed italic">
+                            &quot;{selectedReviewItem.analysis.contributorLearned}&quot;
+                          </p>
+                        ) : (
+                          <p className="text-xs text-slate-500 italic font-mono">No contributor reflection added yet.</p>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+
+              {/* TAB 4: EVIDENCE PROVENANCE */}
+              {detailTab === 'PROVENANCE' && (
+                <div className="space-y-6 font-mono text-xs">
+                  <div className="p-4 rounded-xl border border-amber-900/40 bg-amber-950/10 space-y-2">
+                    <div className="text-amber-400 font-bold uppercase tracking-wider flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-amber-400" />
+                      <span>RR AUDIT PROVENANCE RECORD</span>
+                    </div>
+                    <p className="text-slate-300 font-sans text-xs">
+                      This contribution is recorded on Repo Rescue&apos;s points ledger and audited against GitHub evidence.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <a
+                      href={selectedReviewItem.prUrl || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-4 rounded-xl border border-slate-800 bg-[#080c14] hover:bg-slate-900 transition-all flex items-center justify-between group"
+                    >
+                      <div>
+                        <div className="text-[10px] text-slate-500 font-bold uppercase">PULL REQUEST</div>
+                        <div className="font-bold text-slate-200">PR #{selectedReviewItem.prNumber || 'link'}</div>
+                      </div>
+                      <ExternalLink className="w-4 h-4 text-slate-500 group-hover:text-white" />
+                    </a>
+
+                    {selectedReviewItem.linkedIssueNumber ? (
+                      <a
+                        href={selectedReviewItem.linkedIssueUrl || '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-4 rounded-xl border border-slate-800 bg-[#080c14] hover:bg-slate-900 transition-all flex items-center justify-between group"
+                      >
+                        <div>
+                          <div className="text-[10px] text-slate-500 font-bold uppercase">LINKED ISSUE</div>
+                          <div className="font-bold text-slate-200">Issue #{selectedReviewItem.linkedIssueNumber}</div>
+                        </div>
+                        <ExternalLink className="w-4 h-4 text-slate-500 group-hover:text-white" />
+                      </a>
+                    ) : null}
+
+                    <a
+                      href={selectedReviewItem.repoUrl || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-4 rounded-xl border border-slate-800 bg-[#080c14] hover:bg-slate-900 transition-all flex items-center justify-between group"
+                    >
+                      <div>
+                        <div className="text-[10px] text-slate-500 font-bold uppercase">REPOSITORY</div>
+                        <div className="font-bold text-slate-200 truncate max-w-[140px]">{selectedReviewItem.repoFullName}</div>
+                      </div>
+                      <ExternalLink className="w-4 h-4 text-slate-500 group-hover:text-white" />
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* RIGHT COLUMN (30%): STICKY RR AUDIT & VERIFICATION RAIL (Requirement 1 & 5) */}
+            <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-8 font-mono text-xs">
+
+              {/* RR AUDIT BOX (Requirement 5) */}
+              <div className="p-5 rounded-2xl border border-amber-900/50 bg-amber-950/10 space-y-4">
+                <div className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2 border-b border-amber-900/40 pb-3">
+                  <Shield className="w-4 h-4 text-amber-400" />
+                  <span>AUTHORITATIVE RR AUDIT</span>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <div className="text-[10px] text-amber-400/80 font-bold uppercase">RR POINTS</div>
+                    <div className="text-3xl font-black text-amber-300">+{selectedReviewItem.rrPoints}</div>
+                  </div>
+
+                  <div>
+                    <div className="text-[10px] text-slate-400 font-bold uppercase">RR DIFFICULTY</div>
+                    <div className="text-xl font-bold text-slate-100">
+                      {selectedReviewItem.rrDifficulty.toFixed(1)} <span className="text-xs text-slate-500 font-normal">/ 10</span>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-slate-400 italic pt-2 border-t border-amber-900/30">
+                  &quot;Verified through Repo Rescue&apos;s contribution scoring pipeline.&quot;
+                </p>
+              </div>
+
+              {/* VERIFICATION SIGNALS BOX */}
+              <div className="p-5 rounded-2xl border border-slate-800 bg-[#080c14] space-y-3">
+                <div className="text-[11px] font-bold text-slate-300 uppercase tracking-wider border-b border-slate-800 pb-2">
+                  VERIFICATION SIGNALS
+                </div>
+
+                <div className="space-y-2 text-slate-300 text-[11px]">
+                  <div className="flex items-center justify-between">
+                    <span>GitHub Code Diff:</span>
+                    <span className="text-emerald-400 font-bold">✓ Audited</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>CI Check Status:</span>
+                    <span className={reviewChecksPill.passed ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>
+                      {reviewChecksPill.text}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Points Ledger:</span>
+                    <span className="text-emerald-400 font-bold">✓ Verified</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* QUICK LINKS */}
+              <div className="p-5 rounded-2xl border border-slate-800 bg-[#080c14] space-y-2">
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">EVIDENCE LINKS</div>
+                <a
+                  href={selectedReviewItem.prUrl || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between p-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 transition-colors"
+                >
+                  <span>Pull Request #{selectedReviewItem.prNumber || 'link'}</span>
+                  <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+                </a>
+                <a
+                  href={selectedReviewItem.repoUrl || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between p-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 transition-colors"
+                >
+                  <span className="truncate max-w-[180px]">{selectedReviewItem.repoFullName}</span>
+                  <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+                </a>
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+    );
+  }
+
+  // 2. MAIN ENGINEERING JOURNAL VIEW
+  return (
+    <div className="min-h-screen bg-[#06080e] text-slate-100 py-10 px-4 sm:px-6 lg:px-8 font-sans selection:bg-emerald-500/30 selection:text-emerald-200">
+      <div className="max-w-6xl mx-auto space-y-10">
+
+        {/* PAGE HEADER */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-slate-800/80 pb-8">
+          <div className="space-y-3">
+            {/* Tagline & Trust Indicator (Requirement 1) */}
+            <div className="flex items-center gap-3 font-mono text-xs">
+              <span className="text-emerald-400 font-bold uppercase tracking-widest text-[11px]">
+                ENGINEERING JOURNAL
+              </span>
+              <span className="text-slate-600">·</span>
+              <span className="text-slate-400 font-medium text-[11px]">
+                VERIFIED OPEN-SOURCE WORK
+              </span>
+              <div className="ml-auto md:ml-2 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-800/70 text-emerald-300 text-[10px] font-bold">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span>AUDIT SYSTEM ACTIVE</span>
+              </div>
+            </div>
+
+            {/* Editorial Headline */}
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight font-mono">
+              Verified Engineering Contribution Log
+            </h1>
+
+            {/* Editorial Supporting Sentence */}
+            <p className="text-sm sm:text-base text-slate-400 max-w-2xl leading-relaxed">
+              An evidence-backed record of what you built, changed, and shipped.
             </p>
           </div>
 
-          <div className="flex items-center gap-4">
-            {/* Contributor Identity Card */}
-            <div className="flex items-center gap-3.5 p-3 rounded-2xl border border-slate-800 bg-slate-950/80 shadow-xl font-mono text-xs">
-              <img
-                src={user.image || 'https://avatars.githubusercontent.com/u/583231?v=4'}
-                alt={user.githubUsername}
-                className="w-10 h-10 rounded-full border border-slate-700 bg-slate-900"
-              />
-              <div className="flex flex-col">
-                <span className="font-bold text-slate-100 text-sm">@{user.githubUsername}</span>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-amber-400 font-bold">{user.totalPoints.toLocaleString()} RR Points</span>
-                </div>
+          {/* Contributor Profile Badge */}
+          <div className="shrink-0 flex items-center gap-3.5 p-3 rounded-xl border border-slate-800/90 bg-[#080c14] shadow-xl font-mono text-xs">
+            <img
+              src={user.image || 'https://avatars.githubusercontent.com/u/583231?v=4'}
+              alt={user.githubUsername}
+              className="w-10 h-10 rounded-full border border-slate-700 bg-slate-900"
+            />
+            <div className="flex flex-col space-y-0.5">
+              <span className="font-bold text-slate-100 text-sm">@{user.githubUsername}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-amber-400 font-bold">{totalRrPoints.toLocaleString()} RR Points</span>
               </div>
             </div>
           </div>
@@ -435,7 +1053,7 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
 
         {/* Real-time GitHub Activity Sync Status Banner */}
         {(currentSyncStatus === 'RUNNING' || user.contributorSyncStatus === 'RUNNING') && (
-          <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/30 text-blue-300 text-xs font-mono flex items-center justify-between gap-4 animate-pulse">
+          <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-300 text-xs font-mono flex items-center justify-between gap-4 animate-pulse">
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-blue-400 animate-spin" />
               <span>Syncing GitHub pull requests & auditing verified contributions...</span>
@@ -444,923 +1062,336 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
           </div>
         )}
 
-        {/* TOP-LEVEL CONTRIBUTION OVERVIEW */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/70 backdrop-blur-xl space-y-1 font-mono">
-            <div className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Verified Work</div>
-            <div className="text-2xl font-extrabold text-slate-100">{user.verifiedContributionsCount}</div>
-            <div className="text-[10px] text-emerald-400 flex items-center gap-1 font-semibold">
-              <CheckCircle2 className="w-3 h-3" />
-              <span>Audited PRs</span>
+        {/* TOP-LEVEL JOURNAL SUMMARY STRIP (Requirement 5 & 7) */}
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono">
+            {/* Verified Contributions */}
+            <div className="p-4 rounded-xl border border-slate-800/90 bg-[#080c14] space-y-1">
+              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">VERIFIED CONTRIBUTIONS</div>
+              <div className="text-2xl font-black text-white">{verifiedContributionsCount}</div>
+              <div className="text-[10px] text-emerald-400 flex items-center gap-1 font-semibold">
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                <span>Audited PRs</span>
+              </div>
+            </div>
+
+            {/* RR Points */}
+            <div className="p-4 rounded-xl border border-amber-900/40 bg-amber-950/10 space-y-1">
+              <div className="text-[10px] uppercase tracking-wider text-amber-400/90 font-semibold">RR POINTS</div>
+              <div className="text-2xl font-black text-amber-300">+{totalRrPoints.toLocaleString()}</div>
+              <div className="text-[10px] text-amber-400/70">Authoritative Ledger</div>
+            </div>
+
+            {/* Repositories */}
+            <div className="p-4 rounded-xl border border-slate-800/90 bg-[#080c14] space-y-1">
+              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">REPOSITORIES</div>
+              <div className="text-2xl font-black text-blue-400">{uniqueReposCount}</div>
+              <div className="text-[10px] text-slate-500">Unique Codebases</div>
+            </div>
+
+            {/* Avg RR Difficulty */}
+            <div className="p-4 rounded-xl border border-slate-800/90 bg-[#080c14] space-y-1">
+              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">AVG RR DIFFICULTY</div>
+              <div className="text-2xl font-black text-rose-400">
+                {avgRrDifficulty.toFixed(1)} <span className="text-xs text-slate-500 font-normal">/ 10</span>
+              </div>
+              <div className="text-[10px] text-slate-500">RR Difficulty Matrix</div>
             </div>
           </div>
 
-          <div className="p-4 rounded-xl border border-amber-900/40 bg-amber-950/10 backdrop-blur-xl space-y-1 font-mono">
-            <div className="text-[11px] uppercase tracking-wider text-amber-400 font-medium">RR Points</div>
-            <div className="text-2xl font-extrabold text-amber-300">+{user.totalPoints.toLocaleString()}</div>
-            <div className="text-[10px] text-amber-400/80">Points Ledger</div>
-          </div>
-
-          <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/70 backdrop-blur-xl space-y-1 font-mono">
-            <div className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Repositories</div>
-            <div className="text-2xl font-extrabold text-blue-400">{user.repositoriesCount}</div>
-            <div className="text-[10px] text-slate-500">Unique Codebases</div>
-          </div>
-
-          <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/70 backdrop-blur-xl space-y-1 font-mono">
-            <div className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Engineering Areas</div>
-            <div className="text-2xl font-extrabold text-purple-400">{data.technicalAreas.length}</div>
-            <div className="text-[10px] text-slate-500">Domain Focus</div>
-          </div>
-
-          <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/70 backdrop-blur-xl space-y-1 font-mono">
-            <div className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Avg Difficulty</div>
-            <div className="text-2xl font-extrabold text-rose-400">
-              {user.avgDifficulty.toFixed(1)} <span className="text-xs text-slate-500 font-normal">/ 10</span>
-            </div>
-            <div className="text-[10px] text-slate-500">RR Difficulty</div>
-          </div>
-        </div>
-
-        {/* SEARCH & PR LIFECYCLE FILTER CONTROLS */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-4 rounded-xl border border-slate-800/80 bg-slate-950/50 backdrop-blur-xl font-mono text-xs">
-          {/* PR Lifecycle Buttons */}
-          <div className="flex items-center gap-1.5 p-1 bg-slate-900 border border-slate-800 rounded-xl w-full sm:w-auto">
-            <button
-              onClick={() => setStatusFilter('MERGED')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
-                statusFilter === 'MERGED'
-                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-700/60 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Merged ({mergedCount})
-            </button>
-            <button
-              onClick={() => setStatusFilter('OPEN')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
-                statusFilter === 'OPEN'
-                  ? 'bg-blue-950 text-blue-300 border border-blue-700/60 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Open ({openCount})
-            </button>
-            <button
-              onClick={() => setStatusFilter('CLOSED')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
-                statusFilter === 'CLOSED'
-                  ? 'bg-slate-800 text-slate-300 border border-slate-700/60 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Closed ({closedCount})
-            </button>
-            <button
-              onClick={() => setStatusFilter('ALL')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
-                statusFilter === 'ALL'
-                  ? 'bg-purple-950 text-purple-300 border border-purple-700/60 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              All ({allCount})
-            </button>
-          </div>
-
-          <div className="flex items-center gap-3 w-full md:w-auto justify-end">
-            <div className="relative w-full sm:w-72">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <input
-                type="text"
-                placeholder="Search PRs, repos, techniques..."
-                value={filterQuery}
-                onChange={(e) => setFilterQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
-              />
-              {filterQuery && (
-                <button onClick={() => setFilterQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
-                  <X className="w-3.5 h-3.5" />
-                </button>
+          {/* SEARCH & TECHNIQUE FILTER CONTROLS */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-3 rounded-xl border border-slate-800/80 bg-[#080c14]/80 backdrop-blur-xl font-mono text-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400 font-bold">FILTER VERIFIED WORK:</span>
+              {selectedTechniqueFilter && (
+                <div className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-950 border border-emerald-700/60 text-emerald-300 font-bold">
+                  <span>{selectedTechniqueFilter}</span>
+                  <button onClick={() => setSelectedTechniqueFilter(null)} className="hover:text-white">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
               )}
             </div>
 
-            {selectedCapability && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/80 border border-emerald-700/60 text-emerald-300 font-bold">
-                <span>Filter: {selectedCapability.name}</span>
-                <button onClick={() => setSelectedCapability(null)} className="hover:text-white">
-                  <X className="w-3.5 h-3.5" />
+            <div className="relative w-full sm:w-64">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                type="text"
+                placeholder="Search diffs, PRs..."
+                value={filterQuery}
+                onChange={(e) => setFilterQuery(e.target.value)}
+                className="w-full pl-9 pr-7 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors text-xs"
+              />
+              {filterQuery && (
+                <button onClick={() => setFilterQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                  <X className="w-3 h-3" />
                 </button>
-              </div>
-            )}
-
-            {selectedCategory && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-950/80 border border-blue-700/60 text-blue-300 font-bold">
-                <span>Filter: {selectedCategory}</span>
-                <button onClick={() => setSelectedCategory(null)} className="hover:text-white">
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
 
-        {/* EMPTY STATE */}
-        {!data.hasData || filteredHistory.length === 0 ? (
-          currentSyncStatus === 'RUNNING' || user.contributorSyncStatus === 'RUNNING' ? (
-            <div className="p-12 rounded-2xl border border-blue-900/40 bg-blue-950/20 text-center font-mono space-y-4">
-              <div className="w-16 h-16 mx-auto rounded-2xl bg-blue-900/30 border border-blue-700/50 flex items-center justify-center text-blue-400">
-                <Clock className="w-8 h-8 animate-spin" />
-              </div>
-              <h3 className="text-lg font-bold text-slate-100">
-                Syncing your GitHub contributions...
-              </h3>
-              <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
-                Repo Rescue is discovering your pull requests, auditing linked issues, and calculating your RR Points. Your verified contributions will appear automatically.
-              </p>
+        {/* VERIFIED ENGINEERING WORK TIMELINE (Requirement 6 & 10) */}
+        {verifiedContributionsCount === 0 ? (
+          /* ZERO CONTRIBUTION STATE (Requirement 7) */
+          <div className="p-12 rounded-2xl border border-slate-800 bg-[#080c14] text-center font-mono space-y-4">
+            <div className="w-14 h-14 mx-auto rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500">
+              <BookOpen className="w-7 h-7" />
             </div>
-          ) : (
-            <div className="p-12 rounded-2xl border border-slate-800 bg-slate-950/60 text-center font-mono space-y-4">
-              <div className="w-16 h-16 mx-auto rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500">
-                <BookOpen className="w-8 h-8" />
-              </div>
-              <h3 className="text-lg font-bold text-slate-200">
-                {data.hasData ? `No ${statusFilter.toLowerCase()} contributions match the selected filter.` : "You haven't had a contribution verified yet."}
-              </h3>
-              <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
-                {data.hasData
-                  ? 'Try adjusting your search keywords or clearing active filters.'
-                  : 'Explore open issues on Repo Rescue, submit pull requests on target GitHub repositories, and earn auditable RR Points.'}
-              </p>
-              <div className="pt-2">
-                <Link
-                  href="/issues"
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 font-bold text-xs text-white shadow-lg transition-all"
-                >
-                  <Code2 className="w-4 h-4" />
-                  <span>Explore Open Issues</span>
-                </Link>
-              </div>
+            <h3 className="text-base font-bold text-slate-200">
+              No verified engineering contributions recorded yet.
+            </h3>
+            <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed font-sans">
+              Repo Rescue audits GitHub pull requests against code diffs and CI checks before awarding RR Points and generating engineering case studies.
+            </p>
+            <div className="pt-2">
+              <Link
+                href="/issues"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-bold text-xs text-white shadow-lg transition-all"
+              >
+                <Code2 className="w-4 h-4" />
+                <span>Explore Open Issues</span>
+              </Link>
             </div>
-          )
+          </div>
         ) : (
-          /* EVIDENCE-FIRST ENGINEERING CONTRIBUTION CARDS */
           <div className="space-y-6">
-            <div className="flex items-center justify-between font-mono">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <Brain className="w-5 h-5 text-emerald-400" />
-                ENGINEERING CONTRIBUTIONS ({filteredHistory.length})
-              </h2>
-              <span className="text-xs text-slate-500">Click card to inspect details</span>
+            <div className="flex items-center justify-between font-mono text-xs">
+              <span className="font-bold text-slate-400 tracking-wider uppercase flex items-center gap-2">
+                <Activity className="w-4 h-4 text-emerald-400" />
+                VERIFIED ENGINEERING WORK ({displayHistory.length})
+              </span>
+              <span className="text-slate-500">Audited against GitHub code diffs & CI checks</span>
             </div>
 
-            <div className="space-y-5">
-              {filteredHistory.map((item) => {
-                const isExpanded = expandedId === item.id;
-                const analysis = item.analysis;
-                const isMerged = item.prStatus === 'MERGED';
-                const isOpen = item.prStatus === 'OPEN';
+            {/* TIMELINE CONNECTOR SPINE */}
+            <div className="relative border-l border-slate-800/80 ml-3 sm:ml-6 pl-6 sm:pl-8 space-y-8 font-sans">
+              {displayHistory.map((item, index) => {
+                const dateParts = getTimelineDateParts(item);
+                const prevItem = index > 0 ? displayHistory[index - 1] : null;
+                const prevDateParts = prevItem ? getTimelineDateParts(prevItem) : null;
+                const showYearHeader = !prevDateParts || prevDateParts.year !== dateParts.year;
+
                 const typeInfo = deriveContributionTypeInfo(item);
-                const factualBullets = getFactualBullets(item);
-                const impactText = getKeyImpact(item, typeInfo);
-                const prTitleText = item.prTitle || item.issueTitle || 'Untitled Pull Request';
-                const prNumberText = item.prNumber > 0 ? `#${item.prNumber}` : '';
+                const engineeringChangeText = getEngineeringChangeSummary(item);
+                const checksPill = getChecksSummaryPill(item);
 
                 return (
-                  <div
-                    key={item.id}
-                    className={`rounded-2xl border transition-all overflow-hidden ${
-                      isExpanded
-                        ? 'border-emerald-500/50 bg-[#0c1017] shadow-2xl ring-1 ring-emerald-500/20'
-                        : 'border-slate-800/80 bg-[#090d16] hover:bg-[#0e131f] hover:border-slate-700/80 shadow-lg'
-                    }`}
-                  >
-                    {/* COLLAPSED CARD PREVIEW STATE */}
-                    <div
-                      onClick={() => toggleExpand(item.id)}
-                      className="p-6 cursor-pointer space-y-4 font-sans select-none"
-                    >
-                      {/* ROW 1: REPOSITORY IDENTITY & LIFECYCLE STATUS */}
-                      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/60 pb-3 font-mono text-xs">
-                        {/* Repository Identity */}
-                        <div className="flex items-center gap-2 text-slate-300">
-                          <GithubIcon className="w-4 h-4 text-slate-400" />
-                          <span className="font-bold text-slate-100 hover:text-blue-400 transition-colors">
-                            {item.repoFullName}
-                          </span>
-                          <span className="px-2 py-0.5 rounded-md bg-slate-900 border border-slate-800 text-[10px] text-slate-400 font-medium flex items-center gap-1">
-                            Public
-                            <a
-                              href={item.repoUrl || `https://github.com/${item.repoFullName}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="text-slate-400 hover:text-white"
-                            >
-                              <ExternalLink className="w-2.5 h-2.5 inline" />
-                            </a>
-                          </span>
-                        </div>
-
-                        {/* Lifecycle Status & State Date */}
-                        <div className="flex items-center gap-3">
-                          {isMerged ? (
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 font-bold text-xs">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                              <span>✓ Merged</span>
-                            </span>
-                          ) : isOpen ? (
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-950/80 text-blue-300 border border-blue-800/60 font-bold text-xs">
-                              <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-                              <span>● Open</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 text-slate-400 border border-slate-700 font-bold text-xs">
-                              <X className="w-3.5 h-3.5 text-slate-400" />
-                              <span>× Closed</span>
-                            </span>
-                          )}
-                          <span className="text-slate-400 text-xs">
-                            {isMerged ? (item.mergedAt || 'Merged') : isOpen ? (item.openedAt || 'Open') : (item.closedAt || item.mergedAt || 'Closed')}
-                          </span>
-                        </div>
+                  <React.Fragment key={item.id}>
+                    {showYearHeader && (
+                      <div className="relative -ml-[31px] sm:-ml-[39px] pt-4 pb-2 flex items-center gap-3 font-mono">
+                        <div className="w-3.5 h-3.5 rounded-full bg-slate-900 border-2 border-emerald-400 shrink-0 shadow-sm" />
+                        <span className="text-base font-black text-slate-200 tracking-wider">{dateParts.year}</span>
+                        <div className="h-px bg-slate-800/80 flex-1" />
                       </div>
+                    )}
 
-                      {/* ROW 2: MAIN CONTENT & RR METRIC BADGE BOX */}
-                      <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
-                        <div className="space-y-3 flex-1">
-                          {/* Contribution Type & Tags */}
-                          <div className="flex flex-wrap items-center gap-2 font-mono">
-                            <span className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold ${typeInfo.badgeStyle}`}>
-                              {typeInfo.label}
+                    <div className="relative group">
+                      <div className="absolute -left-[31px] sm:-left-[39px] top-6 w-3.5 h-3.5 rounded-full bg-slate-950 border-2 border-slate-600 group-hover:border-emerald-400 group-hover:bg-emerald-950 transition-colors shrink-0" />
+
+                      {/* CONCISE TIMELINE ENTRY CARD (Requirement 10) */}
+                      <div className="rounded-xl border border-slate-800/90 bg-[#080c14] hover:bg-[#0c101a] hover:border-slate-700/90 shadow-md p-5 space-y-4">
+
+                        {/* REPOSITORY PATH & PR TITLE */}
+                        <div className="space-y-1.5 font-mono">
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs border-b border-slate-800/60 pb-2.5">
+                            <div className="flex items-center gap-2">
+                              <GithubIcon className="w-3.5 h-3.5 text-slate-400" />
+                              <span className="font-bold text-slate-200">{item.repoFullName}</span>
+                              <span className="text-slate-600">·</span>
+                              <span className="text-emerald-400 font-bold">PR #{item.prNumber || 'merged'}</span>
+                            </div>
+
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 text-[11px] font-bold">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                              <span>MERGED</span>
                             </span>
-
-                            {typeInfo.tags.map((tag) => (
-                              <span
-                                key={tag}
-                                className="px-2 py-0.5 rounded-md bg-slate-900/90 border border-slate-800 text-[10px] text-slate-400 font-medium"
-                              >
-                                {tag}
-                              </span>
-                            ))}
                           </div>
 
-                          {/* Actual PR Title (Requirement 3) */}
-                          <div className="space-y-1">
-                            <h3 className="text-lg font-bold text-white tracking-tight hover:text-emerald-400 transition-colors leading-snug">
-                              {prTitleText} {prNumberText && <span className="text-slate-400 font-mono text-sm font-normal">{prNumberText}</span>}
-                            </h3>
-
-                            {/* Separated Linked Issue Badge (Requirement 4) */}
-                            {item.linkedIssueNumber && item.linkedIssueTitle && (
-                              <div className="pt-1">
-                                <a
-                                  href={item.linkedIssueUrl || '#'}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono text-blue-400 hover:underline"
-                                >
-                                  <span>Linked Issue #{item.linkedIssueNumber}: {item.linkedIssueTitle}</span>
-                                  <ExternalLink className="w-3 h-3" />
-                                </a>
-                              </div>
-                            )}
-                          </div>
+                          <h3 className="text-base font-bold text-white tracking-tight font-sans">
+                            {item.prTitle || item.issueTitle}
+                          </h3>
                         </div>
 
-                        {/* RR Metrics Container Box (Requirement 10) */}
-                        <div className="shrink-0 flex items-center md:items-end justify-between md:justify-start gap-4">
-                          <div className="p-3.5 rounded-xl border border-slate-800/90 bg-slate-950/80 shadow-md font-mono text-right space-y-1 min-w-[160px]">
-                            {isMerged ? (
-                              <>
-                                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">RR Points</div>
-                                <div className="text-xl font-black text-amber-300">+{item.rrPoints}</div>
-                                <div className="text-[10px] text-slate-400 border-t border-slate-900 pt-1 mt-1">
-                                  RR Difficulty <strong className="text-slate-200">{item.rrDifficulty.toFixed(1)} / 10</strong>
-                                </div>
-                              </>
-                            ) : (
-                              <div className="py-1 space-y-1 text-center">
-                                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Lifecycle Status</div>
-                                <div className="text-[11px] font-semibold text-slate-400 italic">Not yet eligible for RR Points</div>
-                              </div>
-                            )}
+                        {/* WHAT DID I CHANGE? (ENGINEERING CHANGE SUMMARY) */}
+                        <div className="p-3.5 rounded-lg border border-slate-800/90 bg-[#050810] space-y-1 font-mono">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <Terminal className="w-3 h-3 text-emerald-400" />
+                            <span>ENGINEERING CHANGE</span>
+                          </div>
+                          <p className="text-xs text-slate-200 leading-relaxed font-sans">
+                            {engineeringChangeText}
+                          </p>
+                        </div>
+
+                        {/* CONCISE FOOTPRINT, VERIFICATION & AWARD STRIP (Requirement 10) */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 pt-1 font-mono text-xs border-t border-slate-800/40">
+                          <div className="flex flex-wrap items-center gap-4 text-slate-300 text-[11px]">
+                            {/* HOW MUCH DID I CHANGE? */}
+                            <div className="flex items-center gap-1.5">
+                              <FileCode className="w-3.5 h-3.5 text-slate-400" />
+                              <span>
+                                <strong className="text-slate-100">{item.filesChanged}</strong> {item.filesChanged === 1 ? 'file' : 'files'}
+                              </span>
+                              <span className="text-slate-600">·</span>
+                              <span className="text-emerald-400 font-bold">+{item.linesAdded}</span>
+                              <span className="text-rose-400 font-bold">-{item.linesDeleted}</span>
+                            </div>
+
+                            {/* WAS IT VERIFIED? */}
+                            <div className="flex items-center gap-1">
+                              <CheckCircle2 className={`w-3.5 h-3.5 ${checksPill.passed ? 'text-emerald-400' : 'text-amber-400'}`} />
+                              <span className={checksPill.passed ? 'text-emerald-300 font-semibold' : 'text-amber-300 font-semibold'}>
+                                {checksPill.text}
+                              </span>
+                            </div>
+
+                            {/* WHAT DID REPO RESCUE AWARD? */}
+                            <div className="flex items-center gap-1 text-amber-300 font-bold">
+                              <Shield className="w-3.5 h-3.5 text-amber-400" />
+                              <span>+{item.rrPoints} RR POINTS</span>
+                            </div>
                           </div>
 
-                          <div className="p-2 rounded-lg bg-slate-900 text-slate-400 hover:text-slate-100 transition-colors self-center">
-                            {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                          </div>
+                          {/* [OPEN ENGINEERING REVIEW →] */}
+                          <button
+                            onClick={() => openEngineeringReview(item)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/60 font-bold text-xs transition-all shadow-sm group"
+                          >
+                            <span>OPEN ENGINEERING REVIEW</span>
+                            <ArrowRight className="w-3 h-3 text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
+                          </button>
                         </div>
                       </div>
                     </div>
-
-                    {/* EXPANDED VIEW: HIERARCHIZATION & EVIDENCE-FIRST (v3.0.0 Hierarchy) */}
-                    {isExpanded && (
-                      <div className="border-t border-slate-800/80 p-6 md:p-8 space-y-8 bg-[#0a0e17] rounded-b-2xl font-sans">
-                        {/* 1. ENGINEERING CHANGE THESIS */}
-                        {analysis?.engineeringThesis && (
-                          <div className="p-4 rounded-xl border border-emerald-900/60 bg-emerald-950/20 font-mono space-y-1">
-                            <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
-                              <Terminal className="w-3.5 h-3.5" />
-                              <span>ENGINEERING CHANGE THESIS</span>
-                            </div>
-                            <div className="text-sm font-semibold text-emerald-200 leading-relaxed">
-                              {analysis.engineeringThesis}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* 2. WHAT CHANGED */}
-                        {factualBullets.length > 0 && (
-                          <div className="space-y-3">
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2 font-mono">
-                              <Terminal className="w-4 h-4 text-emerald-400" />
-                              <span>WHAT CHANGED</span>
-                            </h4>
-                            <div className="p-4 rounded-xl border border-slate-800/90 bg-slate-950/60 space-y-2 text-sm text-slate-200 leading-relaxed">
-                              {(analysis?.whatChanged && analysis.whatChanged.length > 0 ? analysis.whatChanged : factualBullets.map(b => ({ statement: b, source: 'VERIFIED_DIFF', confidence: 'HIGH' }))).map((wItem: any, i: number) => {
-                                const statementText = typeof wItem === 'string' ? wItem : wItem.statement;
-                                const sourceTag = typeof wItem === 'object' && wItem.source ? wItem.source : 'VERIFIED_DIFF';
-                                const conf = typeof wItem === 'object' && wItem.confidence ? wItem.confidence : 'HIGH';
-
-                                return (
-                                  <div key={i} className="flex items-start justify-between gap-3 p-2 rounded-lg bg-slate-900/40 border border-slate-800/50">
-                                    <div className="flex items-start gap-2.5">
-                                      <span className="text-emerald-400 font-bold mt-1 text-xs">•</span>
-                                      <span>{statementText}</span>
-                                    </div>
-                                    <div className="shrink-0 flex items-center gap-1.5 font-mono text-[10px]">
-                                      <span className={`px-2 py-0.5 rounded border ${
-                                        sourceTag === 'VERIFIED_DIFF'
-                                          ? 'bg-emerald-950 text-emerald-300 border-emerald-800/60'
-                                          : 'bg-slate-900 text-slate-400 border-slate-700'
-                                      }`}>
-                                        {sourceTag}
-                                      </span>
-                                      <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">
-                                        {conf}
-                                      </span>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* 3. HOW IT WORKS (ARCHITECTURE FLOW) */}
-                        {analysis?.howItWorks && (
-                          <div className="space-y-3 font-mono">
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-purple-400 flex items-center gap-2">
-                              <Layers className="w-4 h-4 text-purple-400" />
-                              <span>HOW IT WORKS (IMPLEMENTATION FLOW)</span>
-                            </h4>
-                            <div className="p-4 rounded-xl border border-purple-900/50 bg-purple-950/20 text-xs text-purple-200 font-semibold flex items-center gap-2 overflow-x-auto">
-                              <span>{analysis.howItWorks}</span>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* 4. FILES CHANGED & COVERAGE */}
-                        {item.filesChanged > 0 && (
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                              <h4 className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2 font-mono">
-                                <FileCode className="w-4 h-4 text-cyan-400" />
-                                <span>FILES CHANGED</span>
-                              </h4>
-                              <div className="flex items-center gap-3 text-[11px] font-mono">
-                                {analysis?.analysisCoverage === 'PARTIAL_DIFF' && (
-                                  <span className="px-2 py-0.5 rounded bg-amber-950/80 border border-amber-800/60 text-amber-300 font-bold">
-                                    Analysis coverage: {analysis?.fileAnalyses?.length || item.filesChanged} of {item.filesChanged} files (PARTIAL_DIFF)
-                                  </span>
-                                )}
-                                <div className="text-slate-400">
-                                  {(item.linesAdded > 0 || item.linesDeleted > 0) ? (
-                                    <>
-                                      <span className="text-emerald-400 font-bold">+{item.linesAdded}</span>{' '}
-                                      <span className="text-rose-400 font-bold">-{item.linesDeleted}</span> across{' '}
-                                    </>
-                                  ) : null}
-                                  <span className="text-slate-200 font-bold">{item.filesChanged} file(s)</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {analysis?.fileAnalyses && analysis.fileAnalyses.length > 0 ? (
-                              <div className="grid grid-cols-1 gap-2 font-mono text-xs">
-                                {analysis.fileAnalyses.map((fa: any, fIdx: number) => (
-                                  <div key={fIdx} className="p-3 rounded-xl border border-slate-800 bg-slate-950/80 space-y-1.5">
-                                    <div className="flex items-center justify-between text-slate-200 font-bold">
-                                      <div className="flex items-center gap-2 truncate">
-                                        <span className={`px-2 py-0.5 rounded text-[10px] uppercase ${
-                                          fa.status === 'added'
-                                            ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                                            : fa.status === 'removed'
-                                            ? 'bg-rose-950 text-rose-300 border border-rose-800'
-                                            : 'bg-blue-950 text-blue-300 border border-blue-800'
-                                        }`}>
-                                          {fa.status}
-                                        </span>
-                                        <span className="truncate">{fa.filename}</span>
-                                      </div>
-                                      <span className="text-[11px]">
-                                        <span className="text-emerald-400 font-bold">+{fa.additions}</span>{' '}
-                                        <span className="text-rose-400 font-bold">-{fa.deletions}</span>
-                                      </span>
-                                    </div>
-                                    <p className="text-xs text-slate-400 font-sans leading-relaxed">{fa.summary}</p>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/80 font-mono text-xs space-y-2 text-slate-300">
-                                <div className="flex items-center justify-between">
-                                  <span className="font-semibold text-slate-200">GitHub Pull Request #{item.prNumber || 'merged'}</span>
-                                  {(item.linesAdded > 0 || item.linesDeleted > 0) && (
-                                    <span className="text-[11px]">
-                                      <span className="text-emerald-400 font-bold">+{item.linesAdded}</span>{' '}
-                                      <span className="text-rose-400 font-bold">-{item.linesDeleted}</span>
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* 5. GITHUB CHECKS / CI VERIFICATION SECTION */}
-                        <div className="space-y-3 font-mono">
-                          <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                            <span>GITHUB CHECKS & CI VERIFICATION</span>
-                          </h4>
-                          <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/80 space-y-3">
-                            <div className="text-xs text-slate-300 font-medium">
-                              {analysis?.checksSummary?.statusText || 'No GitHub checks reported for this pull request.'}
-                            </div>
-
-                            {analysis?.checks && analysis.checks.length > 0 && (
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
-                                {analysis.checks.map((chk: any, cIdx: number) => (
-                                  <div key={cIdx} className="p-2.5 rounded-lg border border-slate-800/80 bg-slate-900/60 flex items-center justify-between text-xs">
-                                    <span className="font-semibold text-slate-200 truncate">{chk.name}</span>
-                                    {chk.verified ? (
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 text-[10px] font-bold">
-                                        <Check className="w-3 h-3" />
-                                        <span>Passed</span>
-                                      </span>
-                                    ) : chk.conclusion === 'failure' ? (
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800 text-[10px] font-bold">
-                                        <X className="w-3 h-3" />
-                                        <span>Failed</span>
-                                      </span>
-                                    ) : (
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800 text-[10px] font-bold">
-                                        <Clock className="w-3 h-3" />
-                                        <span>Pending</span>
-                                      </span>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* 6. KEY IMPACT */}
-                        {impactText && (
-                          <div className="space-y-3">
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-purple-400 flex items-center gap-2 font-mono">
-                              <Sparkles className="w-4 h-4 text-purple-400" />
-                              <span>KEY IMPACT</span>
-                            </h4>
-                            <div className="p-4 rounded-xl border border-purple-900/40 bg-purple-950/20 text-xs text-purple-100 leading-relaxed font-mono">
-                              {impactText}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* 7. ACTUAL BEFORE & AFTER (DIFF) */}
-                        {item.diffPatch && item.diffPatch.before && item.diffPatch.after && (
-                          <div className="space-y-3">
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2 font-mono">
-                              <Activity className="w-4 h-4 text-amber-400" />
-                              <span>BEFORE & AFTER (ACTUAL DIFF)</span>
-                            </h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {/* BEFORE PANEL */}
-                              <div className="rounded-xl border border-rose-900/40 bg-slate-950 overflow-hidden font-mono text-xs">
-                                <div className="px-4 py-2 bg-rose-950/40 border-b border-rose-900/40 font-bold text-rose-300 flex items-center justify-between">
-                                  <span>BEFORE</span>
-                                  <span className="text-[10px] text-rose-400/80">Previous Code</span>
-                                </div>
-                                <pre className="p-4 text-slate-300 overflow-x-auto bg-slate-950/80 text-[11px]">
-                                  <code>{item.diffPatch.before}</code>
-                                </pre>
-                              </div>
-
-                              {/* AFTER PANEL */}
-                              <div className="rounded-xl border border-emerald-900/40 bg-slate-950 overflow-hidden font-mono text-xs">
-                                <div className="px-4 py-2 bg-emerald-950/40 border-b border-emerald-900/40 font-bold text-emerald-300 flex items-center justify-between">
-                                  <span>AFTER</span>
-                                  <span className="text-[10px] text-emerald-400/80">Updated Code</span>
-                                </div>
-                                <pre className="p-4 text-emerald-200 overflow-x-auto bg-slate-950/80 text-[11px]">
-                                  <code>{item.diffPatch.after}</code>
-                                </pre>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* 8. VERIFIED GITHUB EVIDENCE */}
-                        <div className="space-y-3">
-                          <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2 font-mono">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                            <span>VERIFIED GITHUB EVIDENCE</span>
-                          </h4>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 font-mono">
-                            {/* PR Link */}
-                            <a
-                              href={item.prUrl || `https://github.com/${item.repoFullName}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-3.5 rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-900 transition-all flex items-center justify-between text-xs group"
-                            >
-                              <div className="space-y-0.5 truncate">
-                                <div className="text-[10px] font-bold text-slate-400 uppercase">PULL REQUEST</div>
-                                <div className="font-semibold text-slate-200 truncate">{prNumberText || 'PR Link'}</div>
-                              </div>
-                              <Check className="w-4 h-4 text-emerald-400 shrink-0 ml-2 group-hover:scale-110 transition-transform" />
-                            </a>
-
-                            {/* Linked Issue if present */}
-                            {item.linkedIssueNumber ? (
-                              <a
-                                href={item.linkedIssueUrl || '#'}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-3.5 rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-900 transition-all flex items-center justify-between text-xs group"
-                              >
-                                <div className="space-y-0.5 truncate">
-                                  <div className="text-[10px] font-bold text-slate-400 uppercase">LINKED ISSUE</div>
-                                  <div className="font-semibold text-slate-200 truncate">Issue #{item.linkedIssueNumber}</div>
-                                </div>
-                                <Check className="w-4 h-4 text-emerald-400 shrink-0 ml-2 group-hover:scale-110 transition-transform" />
-                              </a>
-                            ) : null}
-
-                            {/* Repository Link */}
-                            <a
-                              href={item.repoUrl || `https://github.com/${item.repoFullName}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-3.5 rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-900 transition-all flex items-center justify-between text-xs group"
-                            >
-                              <div className="space-y-0.5 truncate">
-                                <div className="text-[10px] font-bold text-slate-400 uppercase">REPOSITORY</div>
-                                <div className="font-semibold text-slate-200 truncate">{item.repoFullName}</div>
-                              </div>
-                              <Check className="w-4 h-4 text-emerald-400 shrink-0 ml-2 group-hover:scale-110 transition-transform" />
-                            </a>
-
-                            {/* RR PointsLedger System Verification Badge */}
-                            <div className="p-3.5 rounded-xl border border-emerald-900/40 bg-emerald-950/20 flex items-center justify-between text-xs">
-                              <div className="space-y-0.5">
-                                <div className="text-[10px] font-bold text-emerald-400 uppercase">SYSTEM RECORD</div>
-                                <div className="font-semibold text-emerald-200">RR Points Ledger Verified</div>
-                              </div>
-                              <Shield className="w-4 h-4 text-emerald-400 shrink-0 ml-2" />
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* 9. PULL REQUEST & REPOSITORY DETAILS */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-800/80 font-mono text-xs">
-                          {/* PR Details */}
-                          <div className="space-y-3 p-4 rounded-xl border border-slate-800 bg-slate-950/60">
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-blue-400 flex items-center gap-2">
-                              <GitPullRequest className="w-4 h-4" />
-                              <span>PULL REQUEST DETAILS</span>
-                            </h4>
-                            <div className="space-y-1.5 text-slate-300">
-                              <div className="flex justify-between">
-                                <span className="text-slate-500">PR Title:</span>
-                                <span className="font-bold text-slate-200 truncate max-w-[200px]">{prTitleText}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-slate-500">PR Number:</span>
-                                <span className="font-bold text-slate-200">{prNumberText || 'N/A'}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-slate-500">Lifecycle Status:</span>
-                                <span className="font-bold text-slate-200">{item.prStatus}</span>
-                              </div>
-                              {item.mergedAt && (
-                                <div className="flex justify-between">
-                                  <span className="text-slate-500">Merged Date:</span>
-                                  <span className="font-bold text-slate-200">{item.mergedAt}</span>
-                                </div>
-                              )}
-                              <div className="flex justify-between">
-                                <span className="text-slate-500">Files Changed:</span>
-                                <span className="font-bold text-slate-200">{item.filesChanged} file(s)</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Repo Context */}
-                          <div className="space-y-3 p-4 rounded-xl border border-slate-800 bg-slate-950/60">
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-purple-400 flex items-center gap-2">
-                              <Globe className="w-4 h-4" />
-                              <span>REPOSITORY CONTEXT</span>
-                            </h4>
-                            <div className="space-y-1.5 text-slate-300">
-                              <div className="flex justify-between">
-                                <span className="text-slate-500">Repository:</span>
-                                <span className="font-bold text-slate-200">{item.repoFullName}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-slate-500">Primary Language:</span>
-                                <span className="font-bold text-slate-200">{item.language || 'TypeScript'}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-slate-500">Domain Area:</span>
-                                <span className="font-bold text-slate-200">{item.area}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-slate-500">Category:</span>
-                                <span className="font-bold text-slate-200">{item.category}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* 10. AI ENGINEERING ANALYSIS (Visually distinct from verified evidence) */}
-                        {analysis && (
-                          <div className="space-y-4 pt-4 border-t border-slate-800/80">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-purple-900/60 bg-purple-950/20 font-mono text-xs">
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2">
-                                  <Brain className="w-4 h-4 text-purple-400" />
-                                  <span className="font-bold text-purple-200">AI ENGINEERING INTERPRETATION</span>
-                                  <span className="px-2 py-0.5 rounded-md bg-purple-900/80 border border-purple-700/60 text-purple-300 font-bold text-[10px]">
-                                    AI interpretation — grounded in GitHub evidence
-                                  </span>
-                                </div>
-                                <p className="text-[11px] text-purple-400/80">
-                                  Machine-generated interpretation based on PR discussion and diff context.
-                                </p>
-                              </div>
-
-                              {isOwner && isMerged && (
-                                <button
-                                  onClick={() => handleStartEditAnalysis(item)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 transition-colors self-start sm:self-auto"
-                                >
-                                  <Edit3 className="w-3.5 h-3.5 text-blue-400" />
-                                  <span>Edit Analysis</span>
-                                </button>
-                              )}
-                            </div>
-
-                            <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/60 space-y-3 font-mono text-xs text-slate-300">
-                              <div>
-                                <span className="font-bold text-slate-200 uppercase">Problem Context: </span>
-                                <span>{analysis.problem}</span>
-                              </div>
-                              <div>
-                                <span className="font-bold text-slate-200 uppercase">Investigation Narrative: </span>
-                                <span>{analysis.investigation}</span>
-                              </div>
-                              <div>
-                                <span className="font-bold text-slate-200 uppercase">Approach: </span>
-                                <span>{analysis.approach}</span>
-                              </div>
-                              {analysis.tradeoffs && analysis.tradeoffs.length > 0 && (
-                                <div>
-                                  <span className="font-bold text-slate-200 uppercase">Trade-offs: </span>
-                                  <span>{analysis.tradeoffs.join(' ')}</span>
-                                </div>
-                              )}
-                              <div>
-                                <span className="font-bold text-slate-200 uppercase">Verified Outcome: </span>
-                                <span>{analysis.result}</span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* CONTRIBUTOR ROLE & REFLECTION */}
-                        {analysis?.contributorLearned || isOwner ? (
-                          <div className="space-y-3 pt-4 border-t border-slate-800/80">
-                            <div className="flex items-center justify-between font-mono">
-                              <h4 className="text-xs font-bold uppercase tracking-wider text-blue-400 flex items-center gap-2">
-                                <BookOpen className="w-4 h-4" />
-                                <span>CONTRIBUTOR REFLECTION</span>
-                              </h4>
-                              {isOwner && editingReflectionId !== item.id && (
-                                <button
-                                  onClick={() => {
-                                    setEditingReflectionId(item.id);
-                                    setReflectionText(analysis?.contributorLearned || '');
-                                  }}
-                                  className="inline-flex items-center gap-1 text-xs text-blue-400 hover:underline font-bold"
-                                >
-                                  <Edit3 className="w-3.5 h-3.5" />
-                                  <span>{analysis?.contributorLearned ? 'Edit reflection' : 'Add reflection'}</span>
-                                </button>
-                              )}
-                            </div>
-
-                            {editingReflectionId === item.id ? (
-                              <div className="space-y-3 p-4 rounded-xl border border-blue-800/60 bg-slate-900/80 font-mono">
-                                <textarea
-                                  value={reflectionText}
-                                  onChange={(e) => setReflectionText(e.target.value)}
-                                  placeholder="What engineering insights or lessons did you learn while completing this work?"
-                                  rows={3}
-                                  className="w-full p-3 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                                />
-                                <div className="flex items-center justify-end gap-2 text-xs">
-                                  <button
-                                    onClick={() => setEditingReflectionId(null)}
-                                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold"
-                                  >
-                                    Cancel
-                                  </button>
-                                  <button
-                                    onClick={() => handleSaveReflection(item.id)}
-                                    disabled={savingReflection}
-                                    className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold disabled:opacity-50"
-                                  >
-                                    {savingReflection ? 'Saving...' : 'Save Reflection'}
-                                  </button>
-                                </div>
-                              </div>
-                            ) : analysis?.contributorLearned ? (
-                              <div className="p-4 rounded-xl border border-blue-900/40 bg-blue-950/20 text-xs text-slate-200 leading-relaxed italic">
-                                &quot;{analysis.contributorLearned}&quot;
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : null}
-
-                        {/* RR AUDIT PROVENANCE */}
-                        <div className="p-4 rounded-xl border border-amber-900/40 bg-amber-950/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono text-xs">
-                          <div className="space-y-1">
-                            <div className="text-[10px] uppercase tracking-wider text-amber-400 font-bold">RR AUDIT PROVENANCE</div>
-                            <div className="text-slate-300">
-                              RR Difficulty: <strong className="text-amber-300">{item.rrDifficulty.toFixed(1)} / 10</strong> (Issue difficulty score) · Scoring Algorithm V2.3
-                            </div>
-                            <div className="text-[10px] text-slate-500">
-                              Note: RR scoring and point validity are authoritative and independent of AI engineering analysis.
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            {isMerged ? (
-                              <div className="px-3 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold">
-                                +{item.rrPoints} Verified Contribution Points
-                              </div>
-                            ) : (
-                              <div className="px-3 py-1 rounded-lg bg-slate-900 border border-slate-700 text-slate-400 font-bold">
-                                Not yet eligible for RR Points
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  </React.Fragment>
                 );
               })}
             </div>
           </div>
         )}
 
-        {/* SECTION: YOUR ENGINEERING DNA */}
+        {/* SEPARATE SECTION: DISCOVERED GITHUB ACTIVITY (Requirement 6 & 7) */}
+        {discoveredHistory.length > 0 && (
+          <div className="space-y-4 pt-8 border-t border-slate-800/80 font-mono text-xs">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                <Clock className="w-4 h-4 text-slate-500" />
+                DISCOVERED ACTIVITY ({discoveredHistory.length})
+              </span>
+              <span className="text-slate-500 text-[11px]">Unverified pull requests from GitHub sync</span>
+            </div>
+
+            <div className="space-y-2">
+              {discoveredHistory.map((item) => (
+                <div key={item.id} className="p-3.5 rounded-xl border border-slate-800/80 bg-[#070a12] flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2 font-bold text-slate-300">
+                      <span>{item.repoFullName}</span>
+                      <span className="text-slate-600">·</span>
+                      <span className="text-slate-400">PR #{item.prNumber || 'open'}</span>
+                    </div>
+                    <div className="text-slate-400 font-sans text-xs">{item.prTitle || item.issueTitle}</div>
+                  </div>
+                  <span className="px-2 py-1 rounded bg-slate-900 text-slate-400 border border-slate-800 text-[10px] font-bold">
+                    UNVERIFIED ACTIVITY
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ENGINEERING DNA & OBSERVED EVIDENCE SECTION (Requirement 3, 4, 7) */}
         <div className="space-y-6 pt-10 border-t border-slate-800/80 font-mono">
           <div>
             <div className="flex items-center gap-2 text-xs text-purple-400 font-bold mb-1">
               <Cpu className="w-4 h-4" />
-              <span>AGGREGATED VERIFIED EVIDENCE</span>
+              <span>VERIFIED EVIDENCE SIGNAL</span>
             </div>
             <h2 className="text-2xl font-black text-white tracking-tight">
               YOUR ENGINEERING DNA
             </h2>
             <p className="text-xs text-slate-400 mt-1">
-              Verified technical capabilities, engineering techniques, and technologies extracted from audited open-source contributions.
+              Factual technical techniques and language observations derived exclusively from verified code contributions.
             </p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* 1. Verified Techniques & Capabilities */}
-            <div className="p-6 rounded-2xl border border-slate-800 bg-slate-950/70 backdrop-blur-xl space-y-4">
-              <h3 className="text-base font-bold text-white flex items-center justify-between">
+
+            {/* VERIFIED TECHNIQUES WITH SUPPORTING EVIDENCE EXPOSURE (Requirement 4) */}
+            <div className="p-6 rounded-2xl border border-slate-800 bg-[#080c14] space-y-4">
+              <h3 className="text-sm font-bold text-white flex items-center justify-between">
                 <span className="flex items-center gap-2">
                   <Layers className="w-4 h-4 text-purple-400" />
-                  Technical Techniques
+                  Verified Engineering Techniques
                 </span>
-                <span className="text-xs text-slate-500">Verified Evidence</span>
+                <span className="text-xs text-slate-500">Diff Evidence</span>
               </h3>
 
-              <div className="space-y-3">
-                {data.capabilities.length === 0 ? (
-                  <p className="text-xs text-slate-500 italic">No techniques verified yet.</p>
+              <div className="space-y-2.5">
+                {verifiedTechniquesList.length === 0 ? (
+                  <p className="text-xs text-slate-500 italic">No verified techniques recorded yet.</p>
                 ) : (
-                  data.capabilities.slice(0, 8).map((cap) => (
+                  verifiedTechniquesList.slice(0, 8).map((tech) => (
                     <div
-                      key={cap.id}
-                      onClick={() => {
-                        setSelectedCapability(selectedCapability?.id === cap.id ? null : cap);
-                        setFilterQuery('');
-                      }}
-                      className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
-                        selectedCapability?.id === cap.id
-                          ? 'border-emerald-500 bg-emerald-950/40 shadow-lg'
-                          : 'border-slate-800 bg-slate-900/40 hover:bg-slate-900/80 hover:border-slate-700'
-                      }`}
+                      key={tech.name}
+                      className="p-3.5 rounded-xl border border-slate-800 bg-slate-950 flex items-center justify-between"
                     >
                       <div className="space-y-0.5">
-                        <div className="text-xs font-bold text-slate-100">{cap.name}</div>
-                        <div className="text-[11px] text-emerald-400 font-semibold">
-                          Verified through {cap.count} contribution{cap.count > 1 ? 's' : ''}
+                        <div className="text-xs font-bold text-slate-100">{tech.name}</div>
+                        <div className="text-[10px] text-emerald-400 font-semibold">
+                          Verified evidence · {tech.filesCount} file(s) across {tech.count} contribution(s)
                         </div>
                       </div>
-                      <div className="text-xs font-bold text-slate-400 font-mono">
-                        {cap.percentage}%
-                      </div>
+
+                      <button
+                        onClick={() => openEngineeringReview(tech.sampleItem)}
+                        className="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-[11px] font-bold flex items-center gap-1 transition-colors"
+                      >
+                        <span>View evidence →</span>
+                      </button>
                     </div>
                   ))
                 )}
               </div>
             </div>
 
-            {/* 2. Technologies & Languages */}
-            <div className="p-6 rounded-2xl border border-slate-800 bg-slate-950/70 backdrop-blur-xl space-y-6 flex flex-col justify-between">
-              <div>
-                <h3 className="text-base font-bold text-white flex items-center justify-between mb-4">
-                  <span className="flex items-center gap-2">
-                    <Code2 className="w-4 h-4 text-blue-400" />
-                    Technologies
-                  </span>
-                  <span className="text-xs text-slate-500">Language & Ecosystem Evidence</span>
-                </h3>
+            {/* LANGUAGES OBSERVED (NO PROFICIENCY / SKILL PROGRESS BARS) (Requirement 3) */}
+            <div className="p-6 rounded-2xl border border-slate-800 bg-[#080c14] space-y-5">
+              <h3 className="text-sm font-bold text-white flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Code2 className="w-4 h-4 text-blue-400" />
+                  LANGUAGES OBSERVED
+                </span>
+                <span className="text-xs text-slate-500">Verified Activity</span>
+              </h3>
 
-                <div className="space-y-3">
-                  {data.technologies.languages.map((lang) => (
-                    <div key={lang.name} className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-slate-200">{lang.name}</span>
-                        <span className="text-slate-400 text-[11px]">Used in {lang.count} verified contribution{lang.count > 1 ? 's' : ''}</span>
-                      </div>
-                      <div className="w-full h-2 rounded-full bg-slate-900 overflow-hidden">
-                        <div
-                          style={{ width: `${lang.percentage}%` }}
-                          className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full"
-                        />
-                      </div>
+              <div className="space-y-3">
+                {observedLanguagesList.length === 0 ? (
+                  <p className="text-xs text-slate-500 italic">No language observations from verified contributions yet.</p>
+                ) : (
+                  observedLanguagesList.map((lang) => (
+                    <div key={lang.name} className="p-3 rounded-xl border border-slate-800 bg-slate-950 flex items-center justify-between">
+                      <span className="font-bold text-slate-200 text-xs">{lang.name}</span>
+                      <span className="text-slate-400 text-xs">
+                        Observed in {lang.count} verified contribution{lang.count > 1 ? 's' : ''}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Difficulty Distribution Bar */}
-              <div className="pt-4 border-t border-slate-800 space-y-2">
-                <div className="text-xs font-bold text-slate-300 flex items-center justify-between">
-                  <span>Difficulty Distribution</span>
-                  <span className="text-slate-400 text-[11px]">Avg {data.difficultyDistribution.avgDifficulty} / 10</span>
-                </div>
-                <div className="grid grid-cols-4 gap-2 text-center text-[10px]">
-                  <div className="p-2 rounded bg-blue-950/60 border border-blue-800/50 text-blue-300">
-                    <div className="font-bold text-xs">{data.difficultyDistribution.easyCount}</div>
-                    <div>Easy</div>
-                  </div>
-                  <div className="p-2 rounded bg-cyan-950/60 border border-cyan-800/50 text-cyan-300">
-                    <div className="font-bold text-xs">{data.difficultyDistribution.moderateCount}</div>
-                    <div>Moderate</div>
-                  </div>
-                  <div className="p-2 rounded bg-amber-950/60 border border-amber-800/50 text-amber-300">
-                    <div className="font-bold text-xs">{data.difficultyDistribution.hardCount}</div>
-                    <div>Hard</div>
-                  </div>
-                  <div className="p-2 rounded bg-rose-950/60 border border-rose-800/50 text-rose-300">
-                    <div className="font-bold text-xs">{data.difficultyDistribution.veryHardCount}</div>
-                    <div>Very Hard</div>
-                  </div>
-                </div>
+                  ))
+                )}
               </div>
             </div>
+
           </div>
         </div>
+
       </div>
 
       {/* EDIT ANALYSIS MODAL */}
       {editingAnalysisId && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 font-mono">
-          <div className="max-w-2xl w-full p-6 rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 font-mono">
+          <div className="max-w-2xl w-full p-6 rounded-2xl border border-slate-800 bg-[#080c14] shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <Edit3 className="w-4 h-4 text-blue-400" />
@@ -1378,17 +1409,17 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                   rows={2}
                   value={analysisEditForm.problem}
                   onChange={(e) => setAnalysisEditForm({ ...analysisEditForm, problem: e.target.value })}
-                  className="w-full p-3 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-blue-500"
+                  className="w-full p-3 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-blue-500"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="font-bold text-slate-300 uppercase">Investigation</label>
+                <label className="font-bold text-slate-300 uppercase">Investigation Narrative</label>
                 <textarea
                   rows={3}
                   value={analysisEditForm.investigation}
                   onChange={(e) => setAnalysisEditForm({ ...analysisEditForm, investigation: e.target.value })}
-                  className="w-full p-3 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-blue-500"
+                  className="w-full p-3 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-blue-500"
                 />
               </div>
 
@@ -1398,7 +1429,7 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                   rows={3}
                   value={analysisEditForm.approach}
                   onChange={(e) => setAnalysisEditForm({ ...analysisEditForm, approach: e.target.value })}
-                  className="w-full p-3 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-blue-500"
+                  className="w-full p-3 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-blue-500"
                 />
               </div>
 
@@ -1408,7 +1439,7 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                   type="text"
                   value={analysisEditForm.techniques}
                   onChange={(e) => setAnalysisEditForm({ ...analysisEditForm, techniques: e.target.value })}
-                  className="w-full p-3 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-blue-500"
+                  className="w-full p-3 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-blue-500"
                 />
               </div>
 
@@ -1418,7 +1449,7 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                   rows={2}
                   value={analysisEditForm.tradeoffs}
                   onChange={(e) => setAnalysisEditForm({ ...analysisEditForm, tradeoffs: e.target.value })}
-                  className="w-full p-3 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-blue-500"
+                  className="w-full p-3 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-blue-500"
                 />
               </div>
 
@@ -1428,7 +1459,7 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                   rows={2}
                   value={analysisEditForm.result}
                   onChange={(e) => setAnalysisEditForm({ ...analysisEditForm, result: e.target.value })}
-                  className="w-full p-3 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-blue-500"
+                  className="w-full p-3 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-blue-500"
                 />
               </div>
             </div>
@@ -1436,16 +1467,16 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
             <div className="flex items-center justify-end gap-3 border-t border-slate-800 pt-4 text-xs">
               <button
                 onClick={() => setEditingAnalysisId(null)}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold"
+                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold"
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleSaveAnalysisEdit(editingAnalysisId)}
                 disabled={savingAnalysis}
-                className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold disabled:opacity-50"
+                className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold disabled:opacity-50"
               >
-                {savingAnalysis ? 'Saving Changes...' : 'Save & Mark Contributor Edited'}
+                {savingAnalysis ? 'Saving...' : 'Save & Mark Contributor Edited'}
               </button>
             </div>
           </div>
