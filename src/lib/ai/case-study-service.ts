@@ -205,15 +205,18 @@ export function synthesizeEvidenceAnalysis(
   });
 }
 
+export const CURRENT_CASE_STUDY_VERSION = 'v2.0.0';
+
 /**
- * Gets existing case study analysis or creates a new evidence-backed analysis in the DB.
+ * Gets existing case study analysis or creates/regenerates an evidence-backed analysis in the DB.
  */
 export async function getOrCreateCaseStudyAnalysis(contributionId: string): Promise<CaseStudyData | null> {
   const existing = await prisma.contributionAnalysis.findUnique({
     where: { contributionId },
   });
 
-  if (existing) {
+  // If existing analysis is UP TO DATE (modelVersion === CURRENT_CASE_STUDY_VERSION), return cached record
+  if (existing && existing.modelVersion === CURRENT_CASE_STUDY_VERSION) {
     const synthFallback = synthesizeEvidenceAnalysis({ id: contributionId, issue: null, pullRequest: null });
     return {
       id: existing.id,
@@ -239,6 +242,7 @@ export async function getOrCreateCaseStudyAnalysis(contributionId: string): Prom
     };
   }
 
+  // Otherwise, existing is missing OR stale (modelVersion !== CURRENT_CASE_STUDY_VERSION)!
   // Fetch full contribution with issue and PR relations
   const contribution = await prisma.contribution.findUnique({
     where: { id: contributionId },
@@ -248,7 +252,34 @@ export async function getOrCreateCaseStudyAnalysis(contributionId: string): Prom
     },
   });
 
-  if (!contribution) return null;
+  if (!contribution) {
+    if (existing) {
+      const synthFallback = synthesizeEvidenceAnalysis({ id: contributionId, issue: null, pullRequest: null });
+      return {
+        id: existing.id,
+        contributionId: existing.contributionId,
+        problem: existing.problem,
+        investigation: existing.investigation,
+        approach: existing.approach,
+        whatChanged: (existing as any).whatChanged || synthFallback.whatChanged,
+        techniques: existing.techniques,
+        techniqueDetails: (existing as any).techniqueDetails || synthFallback.techniqueDetails,
+        implementation: (existing.implementation as any) || [],
+        tradeoffs: existing.tradeoffs,
+        result: existing.result,
+        evidence: (existing.evidence as any) || [],
+        confidence: (existing.confidence as any) || 'HIGH',
+        analysisCoverage: ((existing as any).analysisCoverage as any) || 'FULL_DIFF',
+        diffPatch: (existing as any).diffPatch || null,
+        contributorLearned: existing.contributorLearned,
+        modelVersion: existing.modelVersion,
+        generatedAt: existing.generatedAt.toISOString(),
+        contributorEdited: existing.contributorEdited,
+        contributorEditedAt: existing.contributorEditedAt ? existing.contributorEditedAt.toISOString() : null,
+      };
+    }
+    return null;
+  }
 
   // Try fetching real GitHub diff patch files server-side if PR info is available
   let diffData: GitHubPullRequestDiffData | null = null;
@@ -256,51 +287,94 @@ export async function getOrCreateCaseStudyAnalysis(contributionId: string): Prom
   const repo = pr?.repository || contribution.issue?.repository;
 
   if (pr && repo && repo.owner && repo.name && pr.githubNumber) {
-    diffData = await fetchGithubPullRequestFiles(repo.owner, repo.name, pr.githubNumber);
+    try {
+      diffData = await fetchGithubPullRequestFiles(repo.owner, repo.name, pr.githubNumber);
+    } catch (err) {
+      console.warn(`[CaseStudyService] Failed fetching GitHub diff for ${repo.owner}/${repo.name}#${pr.githubNumber}:`, err);
+    }
   }
 
   // Synthesize evidence analysis using diff data
   const synthesized = synthesizeEvidenceAnalysis(contribution, diffData);
 
-  // Save to DB
-  const created = await prisma.contributionAnalysis.create({
-    data: {
+  // Upsert (Update existing stale analysis or create new record in DB)
+  try {
+    const upserted = await prisma.contributionAnalysis.upsert({
+      where: { contributionId },
+      update: {
+        problem: synthesized.problem,
+        investigation: synthesized.investigation,
+        approach: synthesized.approach,
+        techniques: synthesized.techniques,
+        implementation: synthesized.implementation as any,
+        tradeoffs: synthesized.tradeoffs,
+        result: synthesized.result,
+        evidence: synthesized.evidence as any,
+        confidence: synthesized.confidence,
+        modelVersion: CURRENT_CASE_STUDY_VERSION,
+      },
+      create: {
+        contributionId,
+        problem: synthesized.problem,
+        investigation: synthesized.investigation,
+        approach: synthesized.approach,
+        techniques: synthesized.techniques,
+        implementation: synthesized.implementation as any,
+        tradeoffs: synthesized.tradeoffs,
+        result: synthesized.result,
+        evidence: synthesized.evidence as any,
+        confidence: synthesized.confidence,
+        modelVersion: CURRENT_CASE_STUDY_VERSION,
+      },
+    });
+
+    return {
+      id: upserted.id,
+      contributionId: upserted.contributionId,
+      problem: upserted.problem,
+      investigation: upserted.investigation,
+      approach: upserted.approach,
+      whatChanged: synthesized.whatChanged,
+      techniques: upserted.techniques,
+      techniqueDetails: synthesized.techniqueDetails,
+      implementation: (upserted.implementation as any) || [],
+      tradeoffs: upserted.tradeoffs,
+      result: upserted.result,
+      evidence: (upserted.evidence as any) || [],
+      confidence: (upserted.confidence as any) || 'HIGH',
+      analysisCoverage: synthesized.analysisCoverage,
+      diffPatch: synthesized.diffPatch,
+      contributorLearned: upserted.contributorLearned,
+      modelVersion: upserted.modelVersion,
+      generatedAt: upserted.generatedAt.toISOString(),
+      contributorEdited: upserted.contributorEdited,
+      contributorEditedAt: upserted.contributorEditedAt ? upserted.contributorEditedAt.toISOString() : null,
+    };
+  } catch (err) {
+    console.error(`[CaseStudyService] DB upsert failed for ${contributionId}:`, err);
+    return {
+      id: existing?.id || `synth-${contributionId}`,
       contributionId,
       problem: synthesized.problem,
       investigation: synthesized.investigation,
       approach: synthesized.approach,
+      whatChanged: synthesized.whatChanged,
       techniques: synthesized.techniques,
+      techniqueDetails: synthesized.techniqueDetails,
       implementation: synthesized.implementation as any,
       tradeoffs: synthesized.tradeoffs,
       result: synthesized.result,
       evidence: synthesized.evidence as any,
       confidence: synthesized.confidence,
-      modelVersion: 'v2.0.0',
-    },
-  });
-
-  return {
-    id: created.id,
-    contributionId: created.contributionId,
-    problem: created.problem,
-    investigation: created.investigation,
-    approach: created.approach,
-    whatChanged: synthesized.whatChanged,
-    techniques: created.techniques,
-    techniqueDetails: synthesized.techniqueDetails,
-    implementation: (created.implementation as any) || [],
-    tradeoffs: created.tradeoffs,
-    result: created.result,
-    evidence: (created.evidence as any) || [],
-    confidence: (created.confidence as any) || 'HIGH',
-    analysisCoverage: synthesized.analysisCoverage,
-    diffPatch: synthesized.diffPatch,
-    contributorLearned: created.contributorLearned,
-    modelVersion: created.modelVersion,
-    generatedAt: created.generatedAt.toISOString(),
-    contributorEdited: created.contributorEdited,
-    contributorEditedAt: created.contributorEditedAt ? created.contributorEditedAt.toISOString() : null,
-  };
+      analysisCoverage: synthesized.analysisCoverage,
+      diffPatch: synthesized.diffPatch,
+      contributorLearned: existing?.contributorLearned || null,
+      modelVersion: CURRENT_CASE_STUDY_VERSION,
+      generatedAt: new Date().toISOString(),
+      contributorEdited: existing?.contributorEdited || false,
+      contributorEditedAt: existing?.contributorEditedAt ? existing.contributorEditedAt.toISOString() : null,
+    };
+  }
 }
 
 /**

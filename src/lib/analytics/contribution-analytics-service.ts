@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { CaseStudyData, synthesizeEvidenceAnalysis, extractEvidenceBasedTechniques } from '@/lib/ai/case-study-service';
+import { CaseStudyData, synthesizeEvidenceAnalysis, extractEvidenceBasedTechniques, getOrCreateCaseStudyAnalysis, CURRENT_CASE_STUDY_VERSION } from '@/lib/ai/case-study-service';
 
 export interface TimeSeriesPoint {
   date: string;
@@ -283,7 +283,7 @@ export async function getContributionAnalytics(username: string): Promise<Contri
   const historyMap = new Map<string, ContributionHistoryItem>();
 
   // Process all PullRequests first
-  rawPullRequests.forEach((pr) => {
+  for (const pr of rawPullRequests) {
     const repo = pr.repository;
     const issue = pr.issue;
     const contrib = pr.contribution;
@@ -321,50 +321,33 @@ export async function getContributionAnalytics(username: string): Promise<Contri
 
     let caseStudyData: CaseStudyData | null = null;
     if (isVerifiedMerged && contrib) {
-      const synthAnalysis = synthesizeEvidenceAnalysis(contrib);
-      caseStudyData = contrib.analysis ? {
-        id: contrib.analysis.id,
-        contributionId: contrib.analysis.contributionId,
-        problem: contrib.analysis.problem,
-        investigation: contrib.analysis.investigation,
-        approach: contrib.analysis.approach,
-        whatChanged: (contrib.analysis as any).whatChanged || synthAnalysis.whatChanged,
-        techniques: contrib.analysis.techniques,
-        techniqueDetails: (contrib.analysis as any).techniqueDetails || synthAnalysis.techniqueDetails,
-        implementation: (contrib.analysis.implementation as any) || synthAnalysis.implementation,
-        tradeoffs: contrib.analysis.tradeoffs,
-        result: contrib.analysis.result,
-        evidence: (contrib.analysis.evidence as any) || synthAnalysis.evidence,
-        confidence: (contrib.analysis.confidence as any) || 'HIGH',
-        analysisCoverage: ((contrib.analysis as any).analysisCoverage as any) || synthAnalysis.analysisCoverage,
-        diffPatch: (contrib.analysis as any).diffPatch || synthAnalysis.diffPatch,
-        contributorLearned: contrib.analysis.contributorLearned,
-        modelVersion: contrib.analysis.modelVersion,
-        generatedAt: contrib.analysis.generatedAt.toISOString(),
-        contributorEdited: contrib.analysis.contributorEdited,
-        contributorEditedAt: contrib.analysis.contributorEditedAt ? contrib.analysis.contributorEditedAt.toISOString() : null,
-      } : {
-        id: `synth-${contrib.id}`,
-        contributionId: contrib.id,
-        problem: synthAnalysis.problem,
-        investigation: synthAnalysis.investigation,
-        approach: synthAnalysis.approach,
-        whatChanged: synthAnalysis.whatChanged,
-        techniques: synthAnalysis.techniques,
-        techniqueDetails: synthAnalysis.techniqueDetails,
-        implementation: synthAnalysis.implementation,
-        tradeoffs: synthAnalysis.tradeoffs,
-        result: synthAnalysis.result,
-        evidence: synthAnalysis.evidence,
-        confidence: synthAnalysis.confidence,
-        analysisCoverage: synthAnalysis.analysisCoverage,
-        diffPatch: synthAnalysis.diffPatch,
-        contributorLearned: null,
-        modelVersion: 'v1.0.0',
-        generatedAt: new Date(contrib.verifiedAt).toISOString(),
-        contributorEdited: false,
-        contributorEditedAt: null,
-      };
+      if (!contrib.analysis || contrib.analysis.modelVersion !== CURRENT_CASE_STUDY_VERSION) {
+        caseStudyData = await getOrCreateCaseStudyAnalysis(contrib.id);
+      } else {
+        const synthAnalysis = synthesizeEvidenceAnalysis(contrib);
+        caseStudyData = {
+          id: contrib.analysis.id,
+          contributionId: contrib.analysis.contributionId,
+          problem: contrib.analysis.problem,
+          investigation: contrib.analysis.investigation,
+          approach: contrib.analysis.approach,
+          whatChanged: (contrib.analysis as any).whatChanged || synthAnalysis.whatChanged,
+          techniques: contrib.analysis.techniques,
+          techniqueDetails: (contrib.analysis as any).techniqueDetails || synthAnalysis.techniqueDetails,
+          implementation: (contrib.analysis.implementation as any) || synthAnalysis.implementation,
+          tradeoffs: contrib.analysis.tradeoffs,
+          result: contrib.analysis.result,
+          evidence: (contrib.analysis.evidence as any) || synthAnalysis.evidence,
+          confidence: (contrib.analysis.confidence as any) || 'HIGH',
+          analysisCoverage: ((contrib.analysis as any).analysisCoverage as any) || synthAnalysis.analysisCoverage,
+          diffPatch: (contrib.analysis as any).diffPatch || synthAnalysis.diffPatch,
+          contributorLearned: contrib.analysis.contributorLearned,
+          modelVersion: contrib.analysis.modelVersion,
+          generatedAt: contrib.analysis.generatedAt.toISOString(),
+          contributorEdited: contrib.analysis.contributorEdited,
+          contributorEditedAt: contrib.analysis.contributorEditedAt ? contrib.analysis.contributorEditedAt.toISOString() : null,
+        };
+      }
     }
 
     const itemKey = contrib ? contrib.id : pr.id;
@@ -414,10 +397,10 @@ export async function getContributionAnalytics(username: string): Promise<Contri
       analysis: caseStudyData,
       diffPatch: null,
     });
-  });
+  }
 
   // Fallback append for any legacy contributions not linked to a pullRequest
-  rawContribs.forEach((c) => {
+  for (const c of rawContribs) {
     if (!historyMap.has(c.id)) {
       const issue = c.issue;
       const repo = issue.repository;
@@ -433,50 +416,34 @@ export async function getContributionAnalytics(username: string): Promise<Contri
         ? c.analysis.techniques
         : extractEvidenceBasedTechniques(issue.title, issue.body, issue.labels, lang, eco, c.filesChanged || 1);
 
-      const synthAnalysis = synthesizeEvidenceAnalysis(c);
-      const caseStudyData: CaseStudyData = c.analysis ? {
-        id: c.analysis.id,
-        contributionId: c.analysis.contributionId,
-        problem: c.analysis.problem,
-        investigation: c.analysis.investigation,
-        approach: c.analysis.approach,
-        whatChanged: (c.analysis as any).whatChanged || synthAnalysis.whatChanged,
-        techniques: c.analysis.techniques,
-        techniqueDetails: (c.analysis as any).techniqueDetails || synthAnalysis.techniqueDetails,
-        implementation: (c.analysis.implementation as any) || synthAnalysis.implementation,
-        tradeoffs: c.analysis.tradeoffs,
-        result: c.analysis.result,
-        evidence: (c.analysis.evidence as any) || synthAnalysis.evidence,
-        confidence: (c.analysis.confidence as any) || 'HIGH',
-        analysisCoverage: ((c.analysis as any).analysisCoverage as any) || synthAnalysis.analysisCoverage,
-        diffPatch: (c.analysis as any).diffPatch || synthAnalysis.diffPatch,
-        contributorLearned: c.analysis.contributorLearned,
-        modelVersion: c.analysis.modelVersion,
-        generatedAt: c.analysis.generatedAt.toISOString(),
-        contributorEdited: c.analysis.contributorEdited,
-        contributorEditedAt: c.analysis.contributorEditedAt ? c.analysis.contributorEditedAt.toISOString() : null,
-      } : {
-        id: `synth-${c.id}`,
-        contributionId: c.id,
-        problem: synthAnalysis.problem,
-        investigation: synthAnalysis.investigation,
-        approach: synthAnalysis.approach,
-        whatChanged: synthAnalysis.whatChanged,
-        techniques: synthAnalysis.techniques,
-        techniqueDetails: synthAnalysis.techniqueDetails,
-        implementation: synthAnalysis.implementation,
-        tradeoffs: synthAnalysis.tradeoffs,
-        result: synthAnalysis.result,
-        evidence: synthAnalysis.evidence,
-        confidence: synthAnalysis.confidence,
-        analysisCoverage: synthAnalysis.analysisCoverage,
-        diffPatch: synthAnalysis.diffPatch,
-        contributorLearned: null,
-        modelVersion: 'v1.0.0',
-        generatedAt: new Date(c.verifiedAt).toISOString(),
-        contributorEdited: false,
-        contributorEditedAt: null,
-      };
+      let caseStudyData: CaseStudyData | null = null;
+      if (!c.analysis || c.analysis.modelVersion !== CURRENT_CASE_STUDY_VERSION) {
+        caseStudyData = await getOrCreateCaseStudyAnalysis(c.id);
+      } else {
+        const synthAnalysis = synthesizeEvidenceAnalysis(c);
+        caseStudyData = {
+          id: c.analysis.id,
+          contributionId: c.analysis.contributionId,
+          problem: c.analysis.problem,
+          investigation: c.analysis.investigation,
+          approach: c.analysis.approach,
+          whatChanged: (c.analysis as any).whatChanged || synthAnalysis.whatChanged,
+          techniques: c.analysis.techniques,
+          techniqueDetails: (c.analysis as any).techniqueDetails || synthAnalysis.techniqueDetails,
+          implementation: (c.analysis.implementation as any) || synthAnalysis.implementation,
+          tradeoffs: c.analysis.tradeoffs,
+          result: c.analysis.result,
+          evidence: (c.analysis.evidence as any) || synthAnalysis.evidence,
+          confidence: (c.analysis.confidence as any) || 'HIGH',
+          analysisCoverage: ((c.analysis as any).analysisCoverage as any) || synthAnalysis.analysisCoverage,
+          diffPatch: (c.analysis as any).diffPatch || synthAnalysis.diffPatch,
+          contributorLearned: c.analysis.contributorLearned,
+          modelVersion: c.analysis.modelVersion,
+          generatedAt: c.analysis.generatedAt.toISOString(),
+          contributorEdited: c.analysis.contributorEdited,
+          contributorEditedAt: c.analysis.contributorEditedAt ? c.analysis.contributorEditedAt.toISOString() : null,
+        };
+      }
 
       historyMap.set(c.id, {
         id: c.id,
@@ -518,7 +485,7 @@ export async function getContributionAnalytics(username: string): Promise<Contri
         diffPatch: null,
       });
     }
-  });
+  }
 
   const history = Array.from(historyMap.values()).sort(
     (a, b) => b.verifiedAtRaw.getTime() - a.verifiedAtRaw.getTime()
