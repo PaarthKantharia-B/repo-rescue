@@ -124,7 +124,7 @@ async function fetchGithubIssueMetadata(owner: string, repoName: string, issueNu
  */
 export async function syncContributorGithubActivity(
   userId: string,
-  options?: { forceFull?: boolean; customToken?: string }
+  options?: { forceFull?: boolean; customToken?: string; customGithubUsername?: string }
 ): Promise<ContributorSyncResult> {
   const errors: string[] = [];
   let discoveredPrsCount = 0;
@@ -132,11 +132,25 @@ export async function syncContributorGithubActivity(
   let pointsAwarded = 0;
 
   // 1. User & Identity Verification in PostgreSQL
-  const user = await withPrismaRetry(() =>
+  let user = await withPrismaRetry(() =>
     prisma.user.findUnique({
       where: { id: userId },
     })
   );
+
+  // Fallback: If githubUsername is missing in DB but provided in options, update record
+  if (user && !user.githubUsername && options?.customGithubUsername) {
+    try {
+      user = await withPrismaRetry(() =>
+        prisma.user.update({
+          where: { id: userId },
+          data: { githubUsername: options.customGithubUsername },
+        })
+      );
+    } catch (err) {
+      console.warn(`[ContributorSync] Failed updating missing githubUsername for user ${userId}:`, err);
+    }
+  }
 
   if (!user || !user.githubUsername) {
     return {
@@ -157,6 +171,7 @@ export async function syncContributorGithubActivity(
     const timeSinceStart = now.getTime() - new Date(user.syncStartedAt).getTime();
     if (timeSinceStart < 300000) {
       // Lease duration: 5 minutes
+      console.log(`[CONTRIBUTOR_SYNC] userId=${userId} githubUsername=@${githubUsername} status=SKIPPED (lease active)`);
       return {
         status: 'SKIPPED',
         discoveredPrsCount: 0,
@@ -167,6 +182,8 @@ export async function syncContributorGithubActivity(
       };
     }
   }
+
+  console.log(`[CONTRIBUTOR_SYNC] userId=${userId} githubUsername=@${githubUsername} status=STARTED`);
 
   // Update User state to RUNNING
   await withPrismaRetry(() =>
@@ -468,17 +485,19 @@ export async function syncContributorGithubActivity(
       })
     );
 
+    console.log(`[CONTRIBUTOR_SYNC] userId=${userId} githubUsername=@${githubUsername} discoveredPRs=${discoveredPrsCount} verified=${verifiedContributionsCount} pointsAwarded=${pointsAwarded} status=${finalStatus}`);
+
     return {
       status: finalStatus === ContributorSyncStatus.SUCCESS ? 'SUCCESS' : 'PARTIAL',
       discoveredPrsCount,
       verifiedContributionsCount,
       pointsAwarded,
-      reason: `Completed contributor sync for @${githubUsername}. Discovered ${discoveredPrsCount} merged PRs, verified ${verifiedContributionsCount} contributions, awarded +${pointsAwarded} RR Points.`,
+      reason: `Completed contributor sync for @${githubUsername}. Discovered ${discoveredPrsCount} PRs, verified ${verifiedContributionsCount} contributions, awarded +${pointsAwarded} RR Points.`,
       errors,
     };
   } catch (err: any) {
     const errMessage = err.message || String(err);
-    console.error(`❌ [ContributorSync] Major sync error for @${githubUsername}:`, err);
+    console.error(`❌ [CONTRIBUTOR_SYNC] userId=${userId} githubUsername=@${githubUsername} status=FAILED error=${errMessage}`);
 
     await withPrismaRetry(() =>
       prisma.user.update({

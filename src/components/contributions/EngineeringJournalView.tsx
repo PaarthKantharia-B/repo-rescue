@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Shield,
@@ -212,11 +213,35 @@ function getKeyImpact(item: ContributionHistoryItem, typeInfo: ContributionTypeI
 }
 
 export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false }) => {
+  const router = useRouter();
   const [statusFilter, setStatusFilter] = useState<'MERGED' | 'OPEN' | 'CLOSED' | 'ALL'>('MERGED');
   const [expandedId, setExpandedId] = useState<string | null>(data.history.length > 0 ? data.history[0].id : null);
   const [selectedCapability, setSelectedCapability] = useState<VerifiedCapability | null>(null);
   const [filterQuery, setFilterQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [currentSyncStatus, setCurrentSyncStatus] = useState<string>(data.user.contributorSyncStatus || 'IDLE');
+
+  // Automatic Polling when Contributor Sync is RUNNING
+  useEffect(() => {
+    if (!isOwner || currentSyncStatus !== 'RUNNING') return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/contributions/sync');
+        if (res.ok) {
+          const syncData = await res.json();
+          if (syncData.syncStatus) {
+            setCurrentSyncStatus(syncData.syncStatus);
+            if (syncData.syncStatus !== 'RUNNING') {
+              router.refresh();
+            }
+          }
+        }
+      } catch (_) {}
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [isOwner, currentSyncStatus, router]);
 
   // Reflection Editing State
   const [editingReflectionId, setEditingReflectionId] = useState<string | null>(null);
@@ -409,7 +434,7 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
         </div>
 
         {/* Real-time GitHub Activity Sync Status Banner */}
-        {user.contributorSyncStatus === 'RUNNING' && (
+        {(currentSyncStatus === 'RUNNING' || user.contributorSyncStatus === 'RUNNING') && (
           <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/30 text-blue-300 text-xs font-mono flex items-center justify-between gap-4 animate-pulse">
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-blue-400 animate-spin" />
@@ -542,28 +567,42 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
 
         {/* EMPTY STATE */}
         {!data.hasData || filteredHistory.length === 0 ? (
-          <div className="p-12 rounded-2xl border border-slate-800 bg-slate-950/60 text-center font-mono space-y-4">
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500">
-              <BookOpen className="w-8 h-8" />
+          currentSyncStatus === 'RUNNING' || user.contributorSyncStatus === 'RUNNING' ? (
+            <div className="p-12 rounded-2xl border border-blue-900/40 bg-blue-950/20 text-center font-mono space-y-4">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-blue-900/30 border border-blue-700/50 flex items-center justify-center text-blue-400">
+                <Clock className="w-8 h-8 animate-spin" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-100">
+                Syncing your GitHub contributions...
+              </h3>
+              <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+                Repo Rescue is discovering your pull requests, auditing linked issues, and calculating your RR Points. Your verified contributions will appear automatically.
+              </p>
             </div>
-            <h3 className="text-lg font-bold text-slate-200">
-              {data.hasData ? `No ${statusFilter.toLowerCase()} contributions match the selected filter.` : "You haven't had a contribution verified yet."}
-            </h3>
-            <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
-              {data.hasData
-                ? 'Try adjusting your search keywords or clearing active filters.'
-                : 'Explore open issues on Repo Rescue, submit pull requests on target GitHub repositories, and earn auditable RR Points.'}
-            </p>
-            <div className="pt-2">
-              <Link
-                href="/issues"
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 font-bold text-xs text-white shadow-lg transition-all"
-              >
-                <Code2 className="w-4 h-4" />
-                <span>Explore Open Issues</span>
-              </Link>
+          ) : (
+            <div className="p-12 rounded-2xl border border-slate-800 bg-slate-950/60 text-center font-mono space-y-4">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500">
+                <BookOpen className="w-8 h-8" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-200">
+                {data.hasData ? `No ${statusFilter.toLowerCase()} contributions match the selected filter.` : "You haven't had a contribution verified yet."}
+              </h3>
+              <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+                {data.hasData
+                  ? 'Try adjusting your search keywords or clearing active filters.'
+                  : 'Explore open issues on Repo Rescue, submit pull requests on target GitHub repositories, and earn auditable RR Points.'}
+              </p>
+              <div className="pt-2">
+                <Link
+                  href="/issues"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 font-bold text-xs text-white shadow-lg transition-all"
+                >
+                  <Code2 className="w-4 h-4" />
+                  <span>Explore Open Issues</span>
+                </Link>
+              </div>
             </div>
-          </div>
+          )
         ) : (
           /* EVIDENCE-FIRST ENGINEERING CONTRIBUTION CARDS */
           <div className="space-y-6">

@@ -30,10 +30,24 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   events: {
-    async signIn({ user }) {
+    async signIn({ user, profile }) {
       if (user && user.id) {
+        const githubUsername = (profile as any)?.login || (user as any)?.githubUsername;
+        if (githubUsername) {
+          try {
+            await prisma.user.update({
+              where: { id: user.id },
+              data: { githubUsername },
+            });
+          } catch (e) {
+            // Ignore if already set or unique constraint handled
+          }
+        }
+
+        console.log(`[NextAuth signIn] Triggered automatic post-login contributor sync for user ${user.id} (@${githubUsername || 'contributor'})`);
+
         // Fire-and-forget background contributor sync without blocking OAuth login response
-        syncContributorGithubActivity(user.id).catch((err) => {
+        syncContributorGithubActivity(user.id, { customGithubUsername: githubUsername }).catch((err) => {
           console.error('[NextAuth events.signIn] Background contributor sync error:', err);
         });
       }
