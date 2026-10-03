@@ -503,6 +503,52 @@ export function evaluateV2FactorsWithEvidence(
     hasTitleWord('bypass') ||
     hasTitleWord('leak');
 
+  const isCommentaryOrDocsAddition =
+    hasWord('notes') ||
+    hasWord('comment') ||
+    hasWord('comments') ||
+    hasWord('doc') ||
+    hasWord('docs') ||
+    hasWord('documentation') ||
+    hasWord('explanation') ||
+    hasWord('example') ||
+    hasWord('examples') ||
+    hasWord('instruction') ||
+    hasWord('instructions') ||
+    hasWord('clarification') ||
+    hasWord('usage notes') ||
+    hasWord('inline comment');
+
+  const isSubstantiveTechnicalCapability =
+    hasWord('oauth') ||
+    hasWord('auth') ||
+    hasWord('authentication') ||
+    hasWord('login') ||
+    hasWord('endpoint') ||
+    hasWord('api') ||
+    hasWord('persistence') ||
+    hasWord('database') ||
+    hasWord('caching') ||
+    hasWord('cache') ||
+    hasWord('search') ||
+    hasWord('protocol') ||
+    hasWord('provider') ||
+    hasWord('integration') ||
+    hasWord('webhook') ||
+    hasWord('route') ||
+    hasWord('middleware') ||
+    hasWord('service') ||
+    hasWord('capability') ||
+    hasWord('feature');
+
+  const isCommentaryOnly =
+    isCommentaryOrDocsAddition &&
+    (hasTitleWord('comment') || hasTitleWord('comments') || hasTitleWord('explanation') || hasTitleWord('doc') || hasTitleWord('docs') || lowerTitle.startsWith('add comment') || lowerTitle.startsWith('add inline comment')) &&
+    !hasWord('syntax') &&
+    !lowerText.includes('fix print') &&
+    !lowerText.includes('print function') &&
+    !isSubstantiveTechnicalCapability;
+
   const hasExplicitTypoTitleMarker =
     hasTitleWord('typo') ||
     hasTitleWord('spelling') ||
@@ -512,9 +558,12 @@ export function evaluateV2FactorsWithEvidence(
     hasTitleWord('i18n') ||
     hasTitleWord('capitalization') ||
     hasTitleWord('license') ||
+    hasTitleWord('comments') ||
+    hasTitleWord('explanation') ||
+    isCommentaryOnly ||
     (hasTitleWord('image url') || (hasTitleWord('image') && hasTitleWord('link'))) ||
     (hasTitleWord('link') && (hasTitleWord('docs') || hasTitleWord('anchor') || hasTitleWord('tutorial') || hasTitleWord('readme') || hasTitleWord('broken') || hasTitleWord('fix') || hasTitleWord('update'))) ||
-    (hasTitleWord('docs') && (hasTitleWord('fix') || hasTitleWord('update') || hasTitleWord('link') || hasTitleWord('guide') || hasTitleWord('comment') || hasTitleWord('setup') || hasTitleWord('tutorial')));
+    ((hasTitleWord('docs') || hasTitleWord('comments') || hasTitleWord('comment')) && (hasTitleWord('fix') || hasTitleWord('update') || hasTitleWord('link') || hasTitleWord('guide') || hasTitleWord('comment') || hasTitleWord('setup') || hasTitleWord('tutorial') || hasTitleWord('add') || hasTitleWord('explaining')));
 
   const isDocsLabelPresent = labels.some(
     (l) => l.toLowerCase() === 'documentation' || l.toLowerCase() === 'type/docs'
@@ -526,15 +575,17 @@ export function evaluateV2FactorsWithEvidence(
     body.length > 50 &&
     !body.includes('```') &&
     !lowerBody.includes('stack trace') &&
-    (lowerBody.includes('distributed systems') || lowerBody.includes('concurrency') || lowerBody.includes('compiler architecture'));
+    (lowerBody.includes('distributed systems') || lowerBody.includes('concurrency') || lowerBody.includes('compiler architecture') || lowerBody.includes('distributed consensus') || lowerBody.includes('compiler ast') || lowerBody.includes('mutexes') || lowerBody.includes('mvcc') || lowerBody.includes('rls'));
 
   // Documentation classification logic
   const isDocs =
-    bodyExplicitlyDocs ||
-    isKeywordStuffingAttempt ||
-    (hasExplicitTypoTitleMarker && !isSevereDefectTitleExclusion) ||
-    (isDocsLabelPresent && !isSubstantiveCodeContext) ||
-    (lowerTitle.includes('documentation') && !hasWord('migration') && !hasWord('api') && !hasWord('endpoint'));
+    (bodyExplicitlyDocs ||
+      isKeywordStuffingAttempt ||
+      (hasExplicitTypoTitleMarker && !isSevereDefectTitleExclusion) ||
+      (isDocsLabelPresent && !isSubstantiveCodeContext) ||
+      (lowerTitle.includes('documentation') && !hasWord('migration') && !hasWord('api') && !hasWord('endpoint'))) &&
+    !lowerText.includes('fix print') &&
+    !lowerText.includes('syntax error');
 
   // --- 2. CONCEPT TAXONOMY DETECTORS ---
 
@@ -572,8 +623,8 @@ export function evaluateV2FactorsWithEvidence(
 
   // Concept C2: Localized Parser / Lexer Edge Case Bug (Level 4.5 - 6.0)
   const isParserEdgeCase =
-    (hasWord('parser') || hasWord('parse')) &&
-    (hasWord('null bytes') || hasWord('null byte') || hasWord('crash in parser') || hasWord('parsing error') || hasWord('unexpected token') || hasWord('edge case') || hasWord('handling null')) &&
+    (hasWord('parser') || hasWord('parse') || hasWord('parsing')) &&
+    (hasWord('null bytes') || hasWord('null byte') || hasWord('crash in parser') || hasWord('parsing error') || hasWord('unexpected token') || hasWord('edge case') || hasWord('handling null') || hasWord('crash') || hasWord('crashes') || hasWord('malformed') || hasWord('expression') || hasWord('expressions') || hasWord('token')) &&
     !hasCompilerRuntimeSignals;
 
   // Systemic concurrency vs localized memory leak listener
@@ -646,11 +697,49 @@ export function evaluateV2FactorsWithEvidence(
       hasTitleWord('null guard')) &&
     !isSubstantiveFormatContext;
 
+  // Localized Code Fix / Syntax Correction detector
+  const isLocalizedCodeFix =
+    (hasWord('syntax') ||
+      hasWord('syntax error') ||
+      lowerTitle.includes('syntax') ||
+      hasWord('function call') ||
+      hasWord('print function') ||
+      hasWord('print statement') ||
+      lowerText.includes('invalid print') ||
+      lowerText.includes('fix print') ||
+      lowerText.includes('correct print') ||
+      lowerText.includes('fix print function') ||
+      hasWord('missing parenthesis') ||
+      hasWord('missing bracket') ||
+      hasWord('missing semicolon') ||
+      hasWord('missing quote') ||
+      hasWord('missing delimiter') ||
+      hasWord('missing punctuation') ||
+      hasWord('variable name') ||
+      hasWord('typo in code') ||
+      hasWord('typo in variable') ||
+      hasWord('incorrect call') ||
+      hasWord('incorrect function') ||
+      lowerTitle.includes('null check') ||
+      (hasWord('null') && (hasWord('check') || hasWord('guard') || hasWord('fallback')))) &&
+    !isDocs &&
+    !hasCompilerRuntimeSignals &&
+    !isParserEdgeCase &&
+    !hasDistributedConsensusSignals &&
+    !hasStorageEngineSignals &&
+    !hasSystemicConcurrencySignals &&
+    !isSecurityPolicyFix;
+
   // REST API route behavior & status codes
   const isRestApiBehaviorFix =
     (hasWord('404') || hasWord('200') || hasWord('400') || hasWord('500') || hasWord('http') || hasWord('query param') || hasWord('rest') || hasWord('pagination')) &&
     (hasWord('endpoint') || hasWord('api') || hasWord('route') || hasWord('headers')) &&
     !isRateLimitingAlgorithm;
+
+  // Contextual Feature Request detector (replaces broad `hasWord('add')`)
+  const isContextualFeatureRequest =
+    ((lowerTitle.startsWith('feat') || lowerTitle.includes('feature') || hasTitleWord('add')) && !isCommentaryOrDocsAddition) ||
+    ((hasWord('add') || hasWord('support')) && isSubstantiveTechnicalCapability && !isCommentaryOrDocsAddition);
 
   // --- 3. CATEGORY & FACTOR DEDUCTION ENGINE ---
   if (isDependencyDashboard) {
@@ -797,6 +886,14 @@ export function evaluateV2FactorsWithEvidence(
     testEffort = 2.0;
     ambiguity = 2.0;
     signals.push('Localized UI styling or simple display bug');
+  } else if (isLocalizedCodeFix) {
+    category = 'Localized Code Fix / Syntax Correction';
+    techComp = 2.0;
+    scope = 2.0;
+    domain = 1.0;
+    testEffort = 2.0;
+    ambiguity = 2.0;
+    signals.push('Localized code fix or syntax correction');
   } else {
     // --- DYNAMIC CONTINUOUS RESOLUTION FOR LOCALIZED & FEATURE WORK ---
     const isUnitTestOnly = (lowerTitle.startsWith('add unit test') || lowerTitle.startsWith('log warning') || lowerTitle.startsWith('log info') || lowerTitle.startsWith('log error') || lowerTitle.startsWith('add retry') || lowerTitle.startsWith('add mock')) && !hasWord('harness') && !hasWord('e2e');
@@ -816,14 +913,28 @@ export function evaluateV2FactorsWithEvidence(
       domain = 5.0;
       testEffort = 3.5;
       signals.push('Database query optimization / ORM N+1 query join fix');
-    } else if (lowerTitle.startsWith('feat') || lowerTitle.includes('feature') || hasWord('support') || hasWord('add') || hasWord('cache')) {
+    } else if (lowerTitle.startsWith('bug') || lowerTitle.startsWith('validate') || lowerTitle.startsWith('fix') || hasWord('validate')) {
+      category = 'Localized / Moderate Bug Fix';
+      techComp = 3.2;
+      scope = 3.0;
+      domain = 2.5;
+      testEffort = 3.0;
+      signals.push('Component bug fix or data validation logic');
+    } else if (isContextualFeatureRequest) {
       category = 'Feature Request / Enhancement';
       techComp = 4.5;
       scope = 4.5;
       domain = 3.0;
       testEffort = 4.0;
       signals.push('Feature capability expansion');
-    } else if (lowerTitle.startsWith('bug') || hasWord('fix') || hasWord('error') || hasWord('validate') || hasWord('parse')) {
+    } else if (isLocalizedCodeFix) {
+      category = 'Localized Code Fix / Syntax Correction';
+      techComp = 2.0;
+      scope = 2.0;
+      domain = 1.0;
+      testEffort = 2.0;
+      signals.push('Localized code fix or syntax correction');
+    } else if (hasWord('fix') || hasWord('error') || hasWord('parse')) {
       category = 'Localized / Moderate Bug Fix';
       techComp = 3.2;
       scope = 3.0;
@@ -849,7 +960,7 @@ export function evaluateV2FactorsWithEvidence(
       domain += 1.0;
       signals.push('External service integration or DTO formatting');
     }
-    if ((hasWord('session') || hasWord('token') || hasWord('auth') || hasWord('jwt') || hasWord('redis')) && !hasWord('theme') && !hasWord('preference')) {
+    if ((hasWord('session') || hasWord('token') || hasWord('auth') || hasWord('oauth') || hasWord('authentication') || hasWord('jwt') || hasWord('redis')) && !hasWord('theme') && !hasWord('preference')) {
       techComp += 1.0;
       domain += 1.5;
       signals.push('Auth session or caching domain knowledge');
@@ -866,15 +977,50 @@ export function evaluateV2FactorsWithEvidence(
   const hasStackTrace = hasWord('exception') || lowerText.includes('stack trace') || lowerText.includes('at ') || lowerText.includes('error:');
   const hasRepro = lowerText.includes('reproduce') || lowerText.includes('expected behavior');
 
+  const cleanTitleStr = (title || '').replace(/\s+/g, ' ').trim();
+  const cleanBodyStr = (body || '').replace(/\s+/g, ' ').trim();
+  const titleWordsList = cleanTitleStr.split(/\s+/).filter(Boolean);
+  const bodyWordsList = cleanBodyStr.split(/\s+/).filter(Boolean);
+
+  const isExplicitAndClear =
+    hasWord('print') ||
+    hasWord('syntax') ||
+    hasWord('null') ||
+    hasWord('redirect') ||
+    hasWord('hover') ||
+    hasWord('avatar') ||
+    hasWord('typo') ||
+    hasWord('spelling') ||
+    hasWord('email') ||
+    hasWord('signup') ||
+    hasWord('route') ||
+    hasWord('policy') ||
+    hasWord('mutex') ||
+    hasWord('consensus') ||
+    hasWord('function') ||
+    hasWord('call') ||
+    hasWord('alignment') ||
+    hasWord('setup') ||
+    lowerText.includes('error message') ||
+    lowerText.includes('stack trace') ||
+    hasCodeBlock;
+
+  const isExtremelyVague =
+    (titleWordsList.length <= 2 && (cleanBodyStr.length === 0 || bodyWordsList.length <= 3)) &&
+    (lowerTitle === 'fix login' || lowerTitle === 'fix bug' || lowerTitle === 'broken' || lowerTitle === 'not working' || lowerTitle === 'help' || lowerTitle === 'error');
+
   if (bodyLen === 0) {
     ambiguity = 6.0;
     signals.push('Empty issue body requires triage effort');
-  } else if (bodyLen < 150 && !hasCodeBlock) {
-    ambiguity += 2.0;
-    signals.push('Brief issue description requires triage effort');
-  } else if (hasCodeBlock && hasStackTrace && hasRepro) {
+  } else if (isExtremelyVague) {
+    ambiguity = 5.5;
+    signals.push('Vague issue description requires maintainer investigation');
+  } else if (hasCodeBlock && (hasStackTrace || hasRepro)) {
     ambiguity = Math.max(0.5, ambiguity - 1.5);
     signals.push('Detailed reproduction steps & stack trace reduce triage effort');
+  } else if (bodyLen < 150 && !isExplicitAndClear) {
+    ambiguity += 1.5;
+    signals.push('Brief, imprecise issue description requires triage effort');
   }
 
   techComp = Math.min(10.0, Math.max(0.0, Math.round(techComp * 10) / 10));

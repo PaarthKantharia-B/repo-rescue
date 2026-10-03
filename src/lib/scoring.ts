@@ -3,6 +3,7 @@ import { IssueScoreFactors, IssueScoreFactorsV2 } from '@/types';
 export const SCORING_VERSION = 'v1.1.0';
 export const SCORING_VERSION_V2 = 'v2.0.0';
 export const SCORING_VERSION_V2_3 = 'v2.3.0';
+export const SCORING_VERSION_V2_3_1 = 'v2.3.1';
 
 /**
  * V1.1.0 weight configuration (retained for rollback capability).
