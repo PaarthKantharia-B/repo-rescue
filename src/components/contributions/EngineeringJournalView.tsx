@@ -1412,6 +1412,27 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                             </div>
                           </div>
                         </div>
+                      ) : isMerged && hasLinkedIssue && !isVerified ? (
+                        <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-3">
+                          <div className="flex items-center gap-1.5 text-xs font-extrabold text-amber-400 uppercase tracking-wider border-b border-amber-500/20 pb-2">
+                            <Clock className="w-4 h-4 text-amber-500" />
+                            <span>Pending Verification</span>
+                          </div>
+
+                          <div className="space-y-2">
+                            <div>
+                              <div className="text-[10px] text-slate-400 uppercase font-semibold">REASON</div>
+                              <div className="text-xs font-bold text-amber-200">
+                                Linked to Issue #{item.linkedIssueNumber}. Verification in progress.
+                              </div>
+                            </div>
+
+                            <div>
+                              <div className="text-[10px] text-slate-500 uppercase font-semibold">RR POINTS</div>
+                              <div className="text-2xl font-black text-slate-400">+0</div>
+                            </div>
+                          </div>
+                        </div>
                       ) : (
                         <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/90 space-y-3">
                           <div className="flex items-center gap-1.5 text-xs font-extrabold text-slate-400 uppercase tracking-wider border-b border-slate-800 pb-2">
@@ -1429,6 +1450,8 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                                   ? 'PR is not yet merged'
                                   : isClosed
                                   ? 'PR closed without merging'
+                                  : (item as any).verificationReason
+                                  ? (item as any).verificationReason
                                   : 'Verification checks failed'}
                               </div>
                             </div>

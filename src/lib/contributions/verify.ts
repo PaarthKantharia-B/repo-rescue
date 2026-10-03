@@ -231,38 +231,52 @@ export async function verifyAndAwardContribution(payload: GitHubPRPayload): Prom
   const result = await withPrismaRetry(async () => {
     return await prisma.$transaction(async (tx) => {
       // Upsert PullRequest record
-      const upsertedPR = await tx.pullRequest.upsert({
-        where: { githubId: BigInt(pr.id) },
-        create: {
-          id: prId,
-          githubId: BigInt(pr.id),
-          githubNumber: pr.number,
-          repositoryId: repo.id,
-          userId: contributor.id,
-          issueId: matchedIssue.id,
-          title: pr.title,
-          url: `https://github.com/${repo.fullName}/pull/${pr.number}`,
-          status: PRStatus.MERGED,
-          githubState: 'closed',
-          isMerged: true,
-          openedAt: now,
-          closedAt: new Date(pr.merged_at!),
-          mergedAt: new Date(pr.merged_at!),
-          mergedBy: mergerUsername,
-          lastSyncedAt: now,
-          latestActivityAt: now,
-        },
-        update: {
-          status: PRStatus.MERGED,
-          githubState: 'closed',
-          isMerged: true,
-          mergedAt: new Date(pr.merged_at!),
-          mergedBy: mergerUsername,
-          latestActivityAt: now,
-          lastSyncedAt: now,
-          issueId: matchedIssue.id,
-        },
-      });
+      const upsertedPR = existingPR
+        ? await tx.pullRequest.update({
+            where: { id: existingPR.id },
+            data: {
+              status: PRStatus.MERGED,
+              githubState: 'closed',
+              isMerged: true,
+              mergedAt: new Date(pr.merged_at!),
+              mergedBy: mergerUsername,
+              latestActivityAt: now,
+              lastSyncedAt: now,
+              issueId: matchedIssue.id,
+            },
+          })
+        : await tx.pullRequest.upsert({
+            where: { githubId: BigInt(pr.id) },
+            create: {
+              id: prId,
+              githubId: BigInt(pr.id),
+              githubNumber: pr.number,
+              repositoryId: repo.id,
+              userId: contributor.id,
+              issueId: matchedIssue.id,
+              title: pr.title,
+              url: `https://github.com/${repo.fullName}/pull/${pr.number}`,
+              status: PRStatus.MERGED,
+              githubState: 'closed',
+              isMerged: true,
+              openedAt: now,
+              closedAt: new Date(pr.merged_at!),
+              mergedAt: new Date(pr.merged_at!),
+              mergedBy: mergerUsername,
+              lastSyncedAt: now,
+              latestActivityAt: now,
+            },
+            update: {
+              status: PRStatus.MERGED,
+              githubState: 'closed',
+              isMerged: true,
+              mergedAt: new Date(pr.merged_at!),
+              mergedBy: mergerUsername,
+              latestActivityAt: now,
+              lastSyncedAt: now,
+              issueId: matchedIssue.id,
+            },
+          });
 
       // Create Contribution
       const contribution = await tx.contribution.upsert({

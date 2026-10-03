@@ -119,6 +119,30 @@ async function fetchGithubIssueMetadata(owner: string, repoName: string, issueNu
 }
 
 /**
+ * Helper to fetch pull request details from GitHub API if state/merger info needs verification.
+ */
+async function fetchGithubPullRequestDetail(owner: string, repoName: string, pullNumber: number) {
+  const headers: Record<string, string> = {
+    'User-Agent': 'Repo-Rescue-Contributor-Sync',
+    Accept: 'application/vnd.github.v3+json',
+  };
+
+  if (process.env.GITHUB_TOKEN) {
+    headers['Authorization'] = `token ${process.env.GITHUB_TOKEN}`;
+  }
+
+  try {
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repoName}/pulls/${pullNumber}`, { headers });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn(`[ContributorSync] Failed fetching PR detail for ${owner}/${repoName}#${pullNumber}:`, err);
+  }
+  return null;
+}
+
+/**
  * Main Authoritative Contributor Historical Synchronization Service.
  * Discovers, registers, verifies, scores, and creates PointsLedger entries for a user's GitHub PRs.
  */
@@ -293,11 +317,18 @@ export async function syncContributorGithubActivity(
           continue;
         }
 
-        const isMerged = Boolean(prItem.pull_request?.merged_at);
-        const prStatus = isMerged ? 'MERGED' : prItem.state === 'closed' ? 'CLOSED' : 'OPEN';
+        // Fetch authoritative PR detail to verify merged state & merger username
+        const prDetail = await fetchGithubPullRequestDetail(owner, repoName, prItem.number);
+        const isMerged = prDetail
+          ? Boolean(prDetail.merged)
+          : Boolean(prItem.pull_request?.merged_at || (prItem.state === 'closed' && prItem.closed_at));
+        const mergedBy = prDetail?.merged_by?.login || null;
+        const prTitle = prDetail?.title || prItem.title;
+        const prBody = prDetail?.body || prItem.body || '';
+        const prStatus = isMerged ? 'MERGED' : (prDetail?.state || prItem.state) === 'closed' ? 'CLOSED' : 'OPEN';
 
         // Resolve Linked Issue if closing keyword reference present (e.g. Fixes #123)
-        const linkedNums = extractLinkedIssueNumbers(prItem.title, prItem.body || '');
+        const linkedNums = extractLinkedIssueNumbers(prTitle, prBody);
         let matchedIssue = null;
 
         if (linkedNums.length > 0) {
@@ -370,11 +401,10 @@ export async function syncContributorGithubActivity(
         }
 
         // Persist/Upsert PullRequest lifecycle record for ALL discovered PRs
-        const mergedAtDate = isMerged && (prItem.pull_request?.merged_at || prItem.closed_at)
-          ? new Date(prItem.pull_request?.merged_at || prItem.closed_at!)
-          : null;
-        const closedAtDate = prItem.closed_at ? new Date(prItem.closed_at) : null;
-        const openedAtDate = (prItem as any).created_at ? new Date((prItem as any).created_at) : now;
+        const rawMergedAt = prDetail?.merged_at || prItem.pull_request?.merged_at || (isMerged ? prItem.closed_at : null);
+        const mergedAtDate = isMerged && rawMergedAt ? new Date(rawMergedAt) : null;
+        const closedAtDate = prDetail?.closed_at || prItem.closed_at ? new Date(prDetail?.closed_at || prItem.closed_at!) : null;
+        const openedAtDate = prDetail?.created_at || (prItem as any).created_at ? new Date(prDetail?.created_at || (prItem as any).created_at) : now;
 
         await withPrismaRetry(() =>
           prisma.pullRequest.upsert({
@@ -386,24 +416,26 @@ export async function syncContributorGithubActivity(
               repositoryId: repo.id,
               userId: user.id,
               issueId: matchedIssue?.id || null,
-              title: prItem.title,
+              title: prTitle,
               url: prItem.html_url || `https://github.com/${repoFullName}/pull/${prItem.number}`,
               status: prStatus as any,
-              githubState: prItem.state || (isMerged ? 'closed' : 'open'),
+              githubState: prDetail?.state || prItem.state || (isMerged ? 'closed' : 'open'),
               isMerged: isMerged,
               openedAt: openedAtDate,
               closedAt: closedAtDate,
               mergedAt: mergedAtDate,
+              mergedBy: mergedBy,
               lastSyncedAt: now,
               latestActivityAt: now,
             },
             update: {
-              title: prItem.title,
+              title: prTitle,
               status: prStatus as any,
-              githubState: prItem.state || (isMerged ? 'closed' : 'open'),
+              githubState: prDetail?.state || prItem.state || (isMerged ? 'closed' : 'open'),
               isMerged: isMerged,
               closedAt: closedAtDate,
               mergedAt: mergedAtDate,
+              mergedBy: mergedBy,
               lastSyncedAt: now,
               latestActivityAt: now,
               ...(matchedIssue ? { issueId: matchedIssue.id } : {}),
@@ -419,11 +451,11 @@ export async function syncContributorGithubActivity(
             pull_request: {
               id: prItem.id,
               number: prItem.number,
-              title: prItem.title,
-              body: prItem.body || '',
+              title: prTitle,
+              body: prBody,
               merged: true,
               merged_at: mergedAtDate ? mergedAtDate.toISOString() : now.toISOString(),
-              merged_by: { login: 'maintainer-audit' },
+              merged_by: mergedBy ? { login: mergedBy } : null,
               user: {
                 id: 0,
                 login: githubUsername,
