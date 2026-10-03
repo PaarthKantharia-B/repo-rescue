@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession, signIn, signOut } from 'next-auth/react';
-import { Shield, Sparkles, Trophy, Compass, Github, Terminal, User, LogOut, ChevronDown, BookOpen, Menu, X, MessageSquare, GitPullRequest } from 'lucide-react';
+import { Sparkles, Trophy, Compass, Github, Terminal, User, LogOut, ChevronDown, BookOpen, Menu, X, MessageSquare, GitPullRequest } from 'lucide-react';
 import { PointsDisplay } from '../ui/PointsDisplay';
 
 export const Navbar: React.FC = () => {
@@ -31,8 +31,8 @@ export const Navbar: React.FC = () => {
         {/* Brand Logo */}
         <div className="flex items-center gap-8">
           <Link href="/" className="flex items-center gap-2 group">
-            <div className="p-2 rounded-lg bg-blue-950 border border-blue-600/50 text-blue-400 group-hover:scale-105 group-hover:shadow-[0_0_15px_rgba(59,130,246,0.4)] transition-all">
-              <Shield className="w-5 h-5 fill-blue-500/20" />
+            <div className="p-1.5 rounded-lg bg-blue-950 border border-blue-600/50 group-hover:scale-105 group-hover:shadow-[0_0_15px_rgba(59,130,246,0.4)] transition-all flex items-center justify-center">
+              <img src="/panther-logo.png" alt="Repo Rescue Logo" className="w-6 h-6 object-contain" />
             </div>
             <div className="flex flex-col">
               <span className="font-mono font-extrabold text-lg text-slate-100 tracking-tight flex items-center gap-1">
