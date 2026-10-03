@@ -15,8 +15,6 @@ import {
   Cpu,
   Layers,
   Activity,
-  ChevronDown,
-  ChevronUp,
   FileCode,
   Edit3,
   Check,
@@ -24,23 +22,18 @@ import {
   Clock,
   Terminal,
   Brain,
-  Globe,
   ArrowLeft,
   ArrowRight,
-  AlertCircle,
-  FileText,
-  GitCommit,
-  CheckSquare
+  AlertCircle
 } from 'lucide-react';
-import { ContributionAnalyticsData, ContributionHistoryItem, VerifiedCapability } from '@/lib/analytics/contribution-analytics-service';
-import { CaseStudyData } from '@/lib/ai/case-study-service';
+import { ContributionAnalyticsData, ContributionHistoryItem } from '@/lib/analytics/contribution-analytics-service';
 
 interface Props {
   data: ContributionAnalyticsData;
   isOwner?: boolean;
 }
 
-// Crisp inline SVG for official GitHub logo
+// Official GitHub SVG Icon
 const GithubIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
   <svg className={className} fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
     <path
@@ -140,19 +133,30 @@ function getTimelineDateParts(item: ContributionHistoryItem): { year: string; da
   return { year, dayMonth, fullDate };
 }
 
+function formatCardDate(item: ContributionHistoryItem): string {
+  const dateVal = item.mergedAt || item.closedAt || item.openedAt || item.verifiedAtRaw;
+  if (!dateVal) return 'Recent';
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return 'Recent';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 function getEngineeringChangeSummary(item: ContributionHistoryItem): string {
   if (item.analysis?.engineeringThesis && item.analysis.engineeringThesis.trim()) {
     return item.analysis.engineeringThesis;
   }
   if (item.analysis?.whatChanged && item.analysis.whatChanged.length > 0) {
-    const first = item.analysis.whatChanged[0];
-    const text = typeof first === 'string' ? first : first.statement;
-    if (text && text.trim()) return text;
+    const statements: string[] = [];
+    for (const w of item.analysis.whatChanged) {
+      const text = typeof w === 'string' ? w : w.statement;
+      if (text && text.trim()) statements.push(text.trim());
+    }
+    if (statements.length > 0) return statements.slice(0, 2).join(' ');
   }
   if (item.approach && item.approach.trim().length > 10) {
     return item.approach;
   }
-  return `Updated ${item.repoFullName} across ${item.filesChanged || 1} file(s) with verified code changes in PR #${item.prNumber || 'merged'}.`;
+  return `Updated ${item.repoFullName} across ${item.filesChanged || 1} file(s) in PR #${item.prNumber || 'merged'}.`;
 }
 
 function getChecksSummaryPill(item: ContributionHistoryItem): { text: string; passed: boolean; count: number; failed: number } {
@@ -165,11 +169,11 @@ function getChecksSummaryPill(item: ContributionHistoryItem): { text: string; pa
     const failed = checksSummary.failedChecks || checks.filter((c) => c.conclusion === 'failure').length;
     if (total > 0) {
       if (failed === 0 && passed > 0) {
-        return { text: `${passed} ${passed === 1 ? 'check' : 'checks'} · PASSED`, passed: true, count: total, failed: 0 };
+        return { text: `Checks ${passed}/${total} passed`, passed: true, count: total, failed: 0 };
       } else if (failed > 0) {
-        return { text: `${failed} of ${total} checks FAILED`, passed: false, count: total, failed };
+        return { text: `${failed} of ${total} checks failed`, passed: false, count: total, failed };
       } else {
-        return { text: `${passed}/${total} checks completed`, passed: true, count: total, failed: 0 };
+        return { text: `Checks ${passed}/${total} completed`, passed: true, count: total, failed: 0 };
       }
     }
   }
@@ -178,10 +182,10 @@ function getChecksSummaryPill(item: ContributionHistoryItem): { text: string; pa
     const verified = checks.filter((c) => c.verified).length;
     const failed = checks.filter((c) => c.conclusion === 'failure').length;
     const passed = verified === checks.length && failed === 0;
-    return { text: `${verified}/${checks.length} checks PASSED`, passed, count: checks.length, failed };
+    return { text: `Checks ${verified}/${checks.length} passed`, passed, count: checks.length, failed };
   }
 
-  return { text: `1 check · PASSED`, passed: true, count: 1, failed: 0 };
+  return { text: `Checks 1/1 passed`, passed: true, count: 1, failed: 0 };
 }
 
 function getFactualBullets(item: ContributionHistoryItem): string[] {
@@ -189,8 +193,17 @@ function getFactualBullets(item: ContributionHistoryItem): string[] {
 
   if (item.analysis?.whatChanged && Array.isArray(item.analysis.whatChanged) && item.analysis.whatChanged.length > 0) {
     for (const w of item.analysis.whatChanged) {
-      if (w.statement && w.statement.trim().length > 0) {
-        bullets.push(w.statement);
+      const stmt = typeof w === 'string' ? w : w.statement;
+      if (stmt && stmt.trim().length > 0) {
+        bullets.push(stmt.trim());
+      }
+    }
+  }
+
+  if (bullets.length === 0 && item.analysis?.fileAnalyses && item.analysis.fileAnalyses.length > 0) {
+    for (const fa of item.analysis.fileAnalyses) {
+      if (fa.summary) {
+        bullets.push(`${fa.filename}: ${fa.summary}`);
       }
     }
   }
@@ -207,25 +220,115 @@ function getFactualBullets(item: ContributionHistoryItem): string[] {
 
   if (bullets.length === 0) {
     if (item.filesChanged > 0) {
-      bullets.push(`${item.filesChanged} file(s) modified (+${item.linesAdded} / -${item.linesDeleted}) in PR #${item.prNumber || 'merged'}.`);
+      bullets.push(`Modified ${item.filesChanged} file(s) (+${item.linesAdded} / -${item.linesDeleted}) in PR #${item.prNumber || 'merged'}.`);
     } else {
-      bullets.push(`Pull Request submitted to ${item.repoFullName}.`);
+      bullets.push(`Pull Request #${item.prNumber} submitted to ${item.repoFullName}.`);
     }
   }
 
-  return bullets.slice(0, 6);
+  return bullets.slice(0, 5);
+}
+
+function extractCardTechnologies(item: ContributionHistoryItem): string[] {
+  const techs: string[] = [];
+  if (item.category && item.category.trim()) {
+    techs.push(item.category.trim());
+  }
+  if (item.area && item.area.trim() && !techs.includes(item.area.trim())) {
+    techs.push(item.area.trim());
+  }
+
+  const text = `${item.category} ${item.area} ${item.techniques.join(' ')} ${item.prTitle}`.toLowerCase();
+  if (text.includes('express')) techs.push('Express');
+  if (text.includes('jest')) techs.push('Jest');
+  if (text.includes('react')) techs.push('React');
+  if (text.includes('next')) techs.push('Next.js');
+  if (text.includes('prisma')) techs.push('Prisma');
+  if (text.includes('node')) techs.push('Node.js');
+  if (text.includes('docker')) techs.push('Docker');
+  if (text.includes('tailwind')) techs.push('Tailwind CSS');
+
+  if (techs.length === 0 && item.language) {
+    techs.push(item.language);
+  }
+  return Array.from(new Set(techs)).slice(0, 4);
+}
+
+function extractCardConcepts(item: ContributionHistoryItem): string[] {
+  const concepts: string[] = [];
+  if (item.techniques && item.techniques.length > 0) {
+    for (const t of item.techniques) {
+      if (t && t.trim()) concepts.push(t.trim());
+    }
+  }
+  if (item.analysis?.techniques && Array.isArray(item.analysis.techniques)) {
+    for (const t of item.analysis.techniques) {
+      if (typeof t === 'string' && t.trim()) concepts.push(t.trim());
+    }
+  }
+  if (concepts.length === 0 && item.category) {
+    concepts.push(item.category);
+  }
+  return Array.from(new Set(concepts)).slice(0, 4);
+}
+
+function extractCardLanguages(item: ContributionHistoryItem): string[] {
+  const langs: string[] = [];
+  if (item.language && item.language.trim()) {
+    langs.push(item.language.trim());
+  }
+  if (item.diffPatch?.language && item.diffPatch.language.trim()) {
+    langs.push(item.diffPatch.language.trim());
+  }
+  if (langs.length === 0) {
+    langs.push('TypeScript');
+  }
+  return Array.from(new Set(langs)).slice(0, 3);
+}
+
+function deriveStatusTags(item: ContributionHistoryItem): {
+  prStatusTag: { label: string; style: string };
+  issueTag: { label: string; style: string };
+  assignmentTag: { label: string; style: string };
+} {
+  const isMerged = item.prStatus === 'MERGED';
+  const isOpen = item.prStatus === 'OPEN';
+  const isClosed = item.prStatus === 'CLOSED';
+  const isDraft = item.prStatus === 'DRAFT';
+
+  let prStatusTag = { label: 'PULL REQUEST', style: 'bg-slate-900 text-slate-300 border-slate-700' };
+  if (isMerged) {
+    prStatusTag = { label: 'MERGED', style: 'bg-emerald-950/90 text-emerald-300 border-emerald-800/80' };
+  } else if (isOpen) {
+    prStatusTag = { label: 'OPEN', style: 'bg-blue-950/90 text-blue-300 border-blue-800/80' };
+  } else if (isClosed) {
+    prStatusTag = { label: 'CLOSED', style: 'bg-slate-900 text-slate-400 border-slate-700' };
+  } else if (isDraft) {
+    prStatusTag = { label: 'DRAFT', style: 'bg-purple-950/90 text-purple-300 border-purple-800/80' };
+  }
+
+  const hasLinkedIssue = Boolean(item.linkedIssueNumber);
+  const issueTag = hasLinkedIssue
+    ? { label: 'ISSUE VERIFIED', style: 'bg-amber-950/80 text-amber-300 border-amber-800/60' }
+    : { label: 'NO LINKED ISSUE', style: 'bg-slate-900 text-slate-400 border-slate-800' };
+
+  const assignmentTag = item.wasAssigned
+    ? { label: 'ASSIGNED', style: 'bg-indigo-950/80 text-indigo-300 border-indigo-800/60' }
+    : { label: 'UNASSIGNED', style: 'bg-slate-900/80 text-slate-400 border-slate-800' };
+
+  return { prStatusTag, issueTag, assignmentTag };
 }
 
 export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false }) => {
   const router = useRouter();
-  const [statusFilter, setStatusFilter] = useState<'MERGED' | 'OPEN' | 'CLOSED' | 'ALL'>('MERGED');
-  
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'MERGED' | 'OPEN' | 'CLOSED' | 'DRAFT'>('MERGED');
+
   // Full-screen engineering review detail state
   const [selectedReviewItem, setSelectedReviewItem] = useState<ContributionHistoryItem | null>(null);
-  
-  // DEFAULT TAB MUST BE 'CODE' (CODE CHANGES & DIFF)
+
+  // Default detail tab is 'CODE' (CODE CHANGES & DIFF)
   const [detailTab, setDetailTab] = useState<'CODE' | 'CHECKS' | 'INTERPRETATION' | 'PROVENANCE'>('CODE');
-  
+
   const [filterQuery, setFilterQuery] = useState('');
   const [selectedTechniqueFilter, setSelectedTechniqueFilter] = useState<string | null>(null);
   const [currentSyncStatus, setCurrentSyncStatus] = useState<string>(data.user.contributorSyncStatus || 'IDLE');
@@ -252,52 +355,34 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
     return () => clearInterval(interval);
   }, [isOwner, currentSyncStatus, router]);
 
-  // Reflection Editing State
+  // Reflection Editing State (Contributor-Authored Only)
   const [editingReflectionId, setEditingReflectionId] = useState<string | null>(null);
   const [reflectionText, setReflectionText] = useState('');
   const [savingReflection, setSavingReflection] = useState(false);
 
-  // Analysis Editing State
-  const [editingAnalysisId, setEditingAnalysisId] = useState<string | null>(null);
-  const [analysisEditForm, setAnalysisEditForm] = useState<{
-    problem: string;
-    investigation: string;
-    approach: string;
-    techniques: string;
-    tradeoffs: string;
-    result: string;
-  }>({
-    problem: '',
-    investigation: '',
-    approach: '',
-    techniques: '',
-    tradeoffs: '',
-    result: '',
-  });
-  const [savingAnalysis, setSavingAnalysis] = useState(false);
-
-  // Local state to track updated history items
+  // Local state to track history items
   const [localHistory, setLocalHistory] = useState<ContributionHistoryItem[]>(data.history);
 
   // SEPARATION: VERIFIED CONTRIBUTIONS vs DISCOVERED ACTIVITY
-  // A PullRequest record alone is NOT enough. Only actual Contribution records count as verified engineering work.
-  const verifiedHistory = localHistory.filter(
-    (item) => item.status === 'MERGED_AND_AUDITED'
-  );
+  const verifiedHistory = localHistory.filter((item) => item.status === 'MERGED_AND_AUDITED');
+  const discoveredHistory = localHistory.filter((item) => item.status !== 'MERGED_AND_AUDITED');
 
-  const discoveredHistory = localHistory.filter(
-    (item) => item.status !== 'MERGED_AND_AUDITED'
-  );
+  // Counts for filter bar
+  const allCount = localHistory.length;
+  const mergedCount = localHistory.filter((i) => i.prStatus === 'MERGED').length;
+  const openCount = localHistory.filter((i) => i.prStatus === 'OPEN').length;
+  const closedCount = localHistory.filter((i) => i.prStatus === 'CLOSED').length;
+  const draftCount = localHistory.filter((i) => i.prStatus === 'DRAFT').length;
 
-  // Authoritative calculations (Requirement 5, 6, 7)
+  // Authoritative calculations
   const verifiedContributionsCount = verifiedHistory.length;
   const totalRrPoints = verifiedHistory.reduce((acc, item) => acc + (item.rrPoints || 0), 0);
-  const avgRrDifficulty = verifiedContributionsCount > 0
-    ? verifiedHistory.reduce((acc, item) => acc + (item.rrDifficulty || 0), 0) / verifiedContributionsCount
-    : 0;
-  const uniqueReposCount = new Set(verifiedHistory.map((item) => item.repoFullName)).size;
+  const avgRrDifficulty =
+    verifiedContributionsCount > 0
+      ? verifiedHistory.reduce((acc, item) => acc + (item.rrDifficulty || 0), 0) / verifiedContributionsCount
+      : 0;
 
-  // Evidence-based language observations (Requirement 3) - NO PROGRESS BARS / PROFICIENCY IMPLICATIONS
+  // Evidence-based language observations - NO PROGRESS BARS / PROFICIENCY IMPLICATIONS
   const observedLanguagesMap = new Map<string, number>();
   verifiedHistory.forEach((item) => {
     if (item.language) {
@@ -309,8 +394,11 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
     count,
   }));
 
-  // Techniques with supporting evidence files count (Requirement 4)
-  const verifiedTechniquesMap = new Map<string, { name: string; count: number; filesCount: number; sampleItem: ContributionHistoryItem }>();
+  // Techniques with supporting evidence files count
+  const verifiedTechniquesMap = new Map<
+    string,
+    { name: string; count: number; filesCount: number; sampleItem: ContributionHistoryItem }
+  >();
   verifiedHistory.forEach((item) => {
     const fileCount = item.filesChanged || 1;
     for (const tech of item.techniques) {
@@ -332,7 +420,7 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
 
   const openEngineeringReview = (item: ContributionHistoryItem) => {
     setSelectedReviewItem(item);
-    setDetailTab('CODE'); // Default to CODE CHANGES & DIFF
+    setDetailTab('CODE');
   };
 
   const closeEngineeringReview = () => {
@@ -385,69 +473,6 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
     }
   };
 
-  const handleStartEditAnalysis = (item: ContributionHistoryItem) => {
-    const analysis = item.analysis;
-    setEditingAnalysisId(item.id);
-    setAnalysisEditForm({
-      problem: analysis?.problem || '',
-      investigation: analysis?.investigation || '',
-      approach: analysis?.approach || '',
-      techniques: analysis?.techniques ? analysis.techniques.join(', ') : '',
-      tradeoffs: analysis?.tradeoffs ? analysis.tradeoffs.join(', ') : '',
-      result: analysis?.result || '',
-    });
-  };
-
-  const handleSaveAnalysisEdit = async (contributionId: string) => {
-    setSavingAnalysis(true);
-    try {
-      const payload = {
-        problem: analysisEditForm.problem,
-        investigation: analysisEditForm.investigation,
-        approach: analysisEditForm.approach,
-        techniques: analysisEditForm.techniques.split(',').map((s) => s.trim()).filter(Boolean),
-        tradeoffs: analysisEditForm.tradeoffs.split(',').map((s) => s.trim()).filter(Boolean),
-        result: analysisEditForm.result,
-      };
-
-      const res = await fetch(`/api/contributions/${contributionId}/analysis`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const resData = await res.json();
-      if (resData.success && resData.analysis) {
-        const updatedAnalysis: CaseStudyData = resData.analysis;
-        setLocalHistory((prev) =>
-          prev.map((item) => {
-            if (item.id === contributionId) {
-              return {
-                ...item,
-                analysis: updatedAnalysis,
-                techniques: updatedAnalysis.techniques,
-              };
-            }
-            return item;
-          })
-        );
-        if (selectedReviewItem?.id === contributionId) {
-          setSelectedReviewItem({
-            ...selectedReviewItem,
-            analysis: updatedAnalysis,
-            techniques: updatedAnalysis.techniques,
-          });
-        }
-        setEditingAnalysisId(null);
-      } else {
-        alert(resData.error || 'Failed to update analysis.');
-      }
-    } catch (err: any) {
-      alert(err.message || 'Error updating analysis.');
-    } finally {
-      setSavingAnalysis(false);
-    }
-  };
-
   // Filter history for timeline view across ALL discovered PR activity
   const displayHistory = localHistory.filter((item) => {
     const searchPrTitle = item.prTitle || item.issueTitle || '';
@@ -462,6 +487,8 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
       matchesStatus = item.prStatus === 'OPEN';
     } else if (statusFilter === 'CLOSED') {
       matchesStatus = item.prStatus === 'CLOSED';
+    } else if (statusFilter === 'DRAFT') {
+      matchesStatus = item.prStatus === 'DRAFT';
     }
 
     return matchesQuery && matchesTechnique && matchesStatus;
@@ -469,16 +496,14 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
 
   const { user } = data;
 
-  // 1. FULL-SCREEN ENGINEERING REVIEW DETAIL VIEW (Requirement 1)
+  // 1. FULL-SCREEN ENGINEERING REVIEW DETAIL VIEW
   if (selectedReviewItem) {
-    const reviewTypeInfo = deriveContributionTypeInfo(selectedReviewItem);
     const reviewChecksPill = getChecksSummaryPill(selectedReviewItem);
-    const reviewFactualBullets = getFactualBullets(selectedReviewItem);
     const hasFailingChecks = reviewChecksPill.failed > 0;
     const isPartialDiff = selectedReviewItem.analysis?.analysisCoverage === 'PARTIAL_DIFF';
 
     return (
-      <div className="min-h-screen bg-[#06080e] text-slate-100 py-8 px-4 sm:px-6 lg:px-10 font-sans selection:bg-emerald-500/30 selection:text-emerald-200">
+      <div className="min-h-screen bg-[#06080e] text-slate-100 py-8 px-4 sm:px-6 lg:px-10 font-sans selection:bg-orange-500/30 selection:text-orange-200">
         <div className="max-w-7xl mx-auto space-y-6">
 
           {/* BACK TO ENGINEERING JOURNAL HEADER */}
@@ -487,12 +512,12 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
               onClick={closeEngineeringReview}
               className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 transition-all font-bold group"
             >
-              <ArrowLeft className="w-4 h-4 text-emerald-400 group-hover:-translate-x-0.5 transition-transform" />
+              <ArrowLeft className="w-4 h-4 text-orange-400 group-hover:-translate-x-0.5 transition-transform" />
               <span>← BACK TO ENGINEERING JOURNAL</span>
             </button>
 
             <div className="flex items-center gap-3">
-              <span className="px-2.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 text-[10px] font-bold">
+              <span className="px-2.5 py-0.5 rounded bg-orange-950/80 text-orange-300 border border-orange-800/60 text-[10px] font-bold">
                 ● AUDITED ENGINEERING REPORT
               </span>
               <a
@@ -514,7 +539,7 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                 <GithubIcon className="w-4 h-4 text-slate-400" />
                 <span className="font-bold text-slate-200 text-sm">{selectedReviewItem.repoFullName}</span>
                 <span className="text-slate-600">·</span>
-                <span className="text-emerald-400 font-bold">PR #{selectedReviewItem.prNumber || 'merged'}</span>
+                <span className="text-orange-400 font-bold">PR #{selectedReviewItem.prNumber || 'merged'}</span>
               </div>
               <span className="inline-flex items-center gap-1 px-3 py-1 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold text-xs">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
@@ -526,11 +551,11 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
               {selectedReviewItem.prTitle || selectedReviewItem.issueTitle}
             </h1>
 
-            {/* ENGINEERING CHANGE THESIS */}
-            <div className="p-4 rounded-xl border border-emerald-900/60 bg-[#050a12] space-y-1 mt-4">
-              <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
-                <Terminal className="w-3.5 h-3.5 text-emerald-400" />
-                <span>ENGINEERING CHANGE THESIS</span>
+            {/* SHORT SUMMARY / KEY CHANGES */}
+            <div className="p-4 rounded-xl border border-orange-900/40 bg-[#050a12] space-y-1 mt-4">
+              <div className="text-[10px] font-bold text-orange-400 uppercase tracking-wider flex items-center gap-2">
+                <Terminal className="w-3.5 h-3.5 text-orange-400" />
+                <span>SHORT SUMMARY / KEY CHANGES</span>
               </div>
               <p className="text-sm font-semibold text-slate-200 leading-relaxed font-sans">
                 {getEngineeringChangeSummary(selectedReviewItem)}
@@ -541,16 +566,16 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
           {/* DESKTOP 70% / 30% SPLIT LAYOUT */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
 
-            {/* LEFT COLUMN (70%): EVIDENCE, DIFF & ANALYSIS */}
+            {/* LEFT COLUMN (70%): EVIDENCE, DIFF & AI CHANGE ANALYSIS */}
             <div className="lg:col-span-8 space-y-6">
 
-              {/* TABS NAVIGATION (DEFAULT TO 'CODE') */}
+              {/* TABS NAVIGATION */}
               <div className="flex items-center gap-1 border-b border-slate-800 bg-[#080c14] p-1 rounded-xl font-mono text-xs overflow-x-auto">
                 <button
                   onClick={() => setDetailTab('CODE')}
                   className={`px-4 py-2.5 rounded-lg font-bold transition-all flex items-center gap-2 ${
                     detailTab === 'CODE'
-                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-700/60 shadow-sm'
+                      ? 'bg-orange-950/80 text-orange-300 border border-orange-700/60 shadow-sm'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
@@ -562,7 +587,7 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                   onClick={() => setDetailTab('CHECKS')}
                   className={`px-4 py-2.5 rounded-lg font-bold transition-all flex items-center gap-2 ${
                     detailTab === 'CHECKS'
-                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-700/60 shadow-sm'
+                      ? 'bg-orange-950/80 text-orange-300 border border-orange-700/60 shadow-sm'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
@@ -574,19 +599,19 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                   onClick={() => setDetailTab('INTERPRETATION')}
                   className={`px-4 py-2.5 rounded-lg font-bold transition-all flex items-center gap-2 ${
                     detailTab === 'INTERPRETATION'
-                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-700/60 shadow-sm'
+                      ? 'bg-orange-950/80 text-orange-300 border border-orange-700/60 shadow-sm'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   <Brain className="w-4 h-4" />
-                  <span>ENGINEERING ANALYSIS</span>
+                  <span>AI CHANGE ANALYSIS</span>
                 </button>
 
                 <button
                   onClick={() => setDetailTab('PROVENANCE')}
                   className={`px-4 py-2.5 rounded-lg font-bold transition-all flex items-center gap-2 ${
                     detailTab === 'PROVENANCE'
-                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-700/60 shadow-sm'
+                      ? 'bg-orange-950/80 text-orange-300 border border-orange-700/60 shadow-sm'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
@@ -595,11 +620,11 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                 </button>
               </div>
 
-              {/* TAB 1: CODE CHANGES & DIFF (DEFAULT VIEW - Requirement 2 & 9) */}
+              {/* TAB 1: CODE CHANGES & DIFF */}
               {detailTab === 'CODE' && (
                 <div className="space-y-6">
 
-                  {/* PARTIAL DIFF WARNING BANNER (Requirement 9) */}
+                  {/* PARTIAL DIFF WARNING BANNER */}
                   {isPartialDiff && (
                     <div className="p-4 rounded-xl border border-amber-800/60 bg-amber-950/20 text-amber-300 text-xs font-mono flex items-center gap-3">
                       <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
@@ -670,8 +695,8 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                   {/* ACTUAL BEFORE & AFTER CODE PATCH */}
                   {selectedReviewItem.diffPatch && selectedReviewItem.diffPatch.before && selectedReviewItem.diffPatch.after ? (
                     <div className="space-y-3 font-mono">
-                      <h3 className="font-bold text-xs uppercase tracking-wider text-amber-400 flex items-center gap-2">
-                        <Activity className="w-4 h-4 text-amber-400" />
+                      <h3 className="font-bold text-xs uppercase tracking-wider text-orange-400 flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-orange-400" />
                         <span>ACTUAL CODE PATCH (BEFORE VS AFTER)</span>
                       </h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -699,7 +724,7 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                 </div>
               )}
 
-              {/* TAB 2: AUTOMATED CHECKS (Requirement 8) */}
+              {/* TAB 2: AUTOMATED CHECKS */}
               {detailTab === 'CHECKS' && (
                 <div className="space-y-6 font-mono text-xs">
                   <div className="p-4 rounded-xl border border-slate-800 bg-[#080c14] space-y-2">
@@ -712,7 +737,6 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                     </p>
                   </div>
 
-                  {/* FAILING CHECK NOTICE ENFORCEMENT (Requirement 8) */}
                   {hasFailingChecks && (
                     <div className="p-4 rounded-xl border border-rose-900/60 bg-rose-950/20 text-rose-300 text-xs flex items-center gap-3">
                       <X className="w-5 h-5 text-rose-400 shrink-0" />
@@ -755,54 +779,111 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                 </div>
               )}
 
-              {/* TAB 3: ENGINEERING ANALYSIS */}
+              {/* TAB 3: AI CHANGE ANALYSIS (EVIDENCE-GROUNDED) */}
               {detailTab === 'INTERPRETATION' && (
                 <div className="space-y-6">
                   {selectedReviewItem.analysis ? (
                     <div className="space-y-5">
-                      <div className="p-4 rounded-xl border border-purple-900/60 bg-purple-950/20 font-mono text-xs flex items-center justify-between">
+                      {/* HEADER */}
+                      <div className="p-4 rounded-xl border border-orange-900/60 bg-orange-950/20 font-mono text-xs flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <Brain className="w-4 h-4 text-purple-400" />
-                          <span className="font-bold text-purple-200">AI ENGINEERING INTERPRETATION</span>
+                          <Brain className="w-4 h-4 text-orange-400" />
+                          <span className="font-bold text-orange-200 uppercase">AI CHANGE ANALYSIS</span>
                         </div>
-                        {isOwner && (
-                          <button
-                            onClick={() => handleStartEditAnalysis(selectedReviewItem)}
-                            className="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1"
-                          >
-                            <Edit3 className="w-3 h-3 text-blue-400" />
-                            <span>Edit Analysis</span>
-                          </button>
-                        )}
+                        <span className="text-[10px] text-orange-400/80 font-bold font-mono">
+                          Evidence-grounded report from GitHub Files Changed
+                        </span>
                       </div>
 
-                      <div className="p-5 rounded-xl border border-slate-800 bg-[#080c14] space-y-4 font-mono text-xs text-slate-300">
-                        <div>
-                          <span className="font-bold text-slate-100 uppercase">Problem Context: </span>
-                          <span className="font-sans text-slate-300">{selectedReviewItem.analysis.problem}</span>
+                      {/* SECTION 1: CHANGE SUMMARY */}
+                      <div className="p-5 rounded-xl border border-slate-800 bg-[#080c14] space-y-2 font-mono text-xs">
+                        <div className="text-[10px] font-extrabold text-orange-400 uppercase tracking-wider">
+                          CHANGE SUMMARY
                         </div>
-                        <div>
-                          <span className="font-bold text-slate-100 uppercase">Investigation Narrative: </span>
-                          <span className="font-sans text-slate-300">{selectedReviewItem.analysis.investigation}</span>
+                        <p className="text-sm font-semibold text-slate-100 font-sans leading-relaxed">
+                          {getEngineeringChangeSummary(selectedReviewItem)}
+                        </p>
+                      </div>
+
+                      {/* SECTION 2: DETAILED CHANGE REPORT (FILE-BY-FILE ANALYSIS) */}
+                      <div className="p-5 rounded-xl border border-slate-800 bg-[#080c14] space-y-4 font-mono text-xs">
+                        <div className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider flex items-center justify-between border-b border-slate-800/80 pb-2">
+                          <span>DETAILED CHANGE REPORT (FILE-BY-FILE)</span>
+                          <span className="text-[10px] text-slate-500 font-normal">
+                            {selectedReviewItem.analysis.fileAnalyses?.length || selectedReviewItem.filesChanged} file(s) analyzed
+                          </span>
                         </div>
-                        <div>
-                          <span className="font-bold text-slate-100 uppercase">Implementation Approach: </span>
-                          <span className="font-sans text-slate-300">{selectedReviewItem.analysis.approach}</span>
-                        </div>
-                        {selectedReviewItem.analysis.tradeoffs && selectedReviewItem.analysis.tradeoffs.length > 0 && (
-                          <div>
-                            <span className="font-bold text-slate-100 uppercase">Trade-offs & Considerations: </span>
-                            <span className="font-sans text-slate-300">{selectedReviewItem.analysis.tradeoffs.join(' ')}</span>
+
+                        {selectedReviewItem.analysis.fileAnalyses && selectedReviewItem.analysis.fileAnalyses.length > 0 ? (
+                          <div className="space-y-3">
+                            {selectedReviewItem.analysis.fileAnalyses.map((fa: any, fIdx: number) => (
+                              <div key={fIdx} className="p-4 rounded-xl border border-slate-800/90 bg-[#050810] space-y-2">
+                                <div className="flex items-center justify-between font-bold">
+                                  <div className="flex items-center gap-2 truncate">
+                                    <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-mono ${
+                                      fa.status === 'added'
+                                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                                        : fa.status === 'removed'
+                                        ? 'bg-rose-950 text-rose-300 border border-rose-800'
+                                        : 'bg-blue-950 text-blue-300 border border-blue-800'
+                                    }`}>
+                                      {fa.status}
+                                    </span>
+                                    <span className="text-slate-200 font-mono text-xs truncate">{fa.filename}</span>
+                                  </div>
+                                  <div className="text-xs font-mono">
+                                    <span className="text-emerald-400 font-bold">+{fa.additions}</span>{' '}
+                                    <span className="text-rose-400 font-bold">-{fa.deletions}</span>
+                                  </div>
+                                </div>
+
+                                <ul className="space-y-1 font-sans text-xs text-slate-300 pl-1">
+                                  <li className="flex items-start gap-2">
+                                    <span className="text-orange-500 font-mono mt-0.5">•</span>
+                                    <span className="leading-relaxed">{fa.summary || 'Modified code file in repository.'}</span>
+                                  </li>
+                                  {fa.evidence && Array.isArray(fa.evidence) && fa.evidence.length > 0 && fa.evidence.map((ev: string, eIdx: number) => (
+                                    <li key={eIdx} className="flex items-start gap-2">
+                                      <span className="text-orange-400 font-mono mt-0.5">•</span>
+                                      <span className="leading-relaxed text-slate-400 text-[11px]">{ev}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="p-4 rounded-xl border border-slate-800 bg-[#050810] text-slate-400 italic font-mono text-xs">
+                            Diff unavailable for file-by-file inspection.
                           </div>
                         )}
                       </div>
 
-                      {/* Contributor Reflection */}
-                      <div className="p-5 rounded-xl border border-blue-900/40 bg-blue-950/20 space-y-3">
-                        <div className="flex items-center justify-between font-mono text-xs">
+                      {/* SECTION 3: TECHNIQUES DETECTED */}
+                      <div className="p-5 rounded-xl border border-slate-800 bg-[#080c14] space-y-3 font-mono text-xs">
+                        <div className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                          TECHNIQUES DETECTED (DIFF-SUPPORTED)
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedReviewItem.techniques && selectedReviewItem.techniques.length > 0 ? (
+                            selectedReviewItem.techniques.map((tech) => (
+                              <span key={tech} className="px-3 py-1 rounded-lg bg-orange-950/60 border border-orange-800/60 text-orange-300 font-semibold text-xs flex items-center gap-1.5 font-mono">
+                                <span className="w-1.5 h-1.5 rounded-full bg-orange-400"></span>
+                                <span>{tech}</span>
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-xs text-slate-500 italic">No specific techniques extracted from diff.</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* CONTRIBUTOR REFLECTION (STRICTLY CONTRIBUTOR-AUTHORED ONLY) */}
+                      <div className="p-5 rounded-xl border border-blue-900/40 bg-blue-950/20 space-y-3 font-mono">
+                        <div className="flex items-center justify-between text-xs">
                           <span className="font-bold text-blue-300 uppercase flex items-center gap-2">
                             <BookOpen className="w-4 h-4 text-blue-400" />
-                            <span>CONTRIBUTOR REFLECTION</span>
+                            <span>CONTRIBUTOR REFLECTION (AUTHOR-WRITTEN)</span>
                           </span>
                           {isOwner && (
                             <button
@@ -817,7 +898,7 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                           )}
                         </div>
                         {editingReflectionId === selectedReviewItem.id ? (
-                          <div className="space-y-3 font-mono">
+                          <div className="space-y-3">
                             <textarea
                               value={reflectionText}
                               onChange={(e) => setReflectionText(e.target.value)}
@@ -842,11 +923,11 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                             </div>
                           </div>
                         ) : selectedReviewItem.analysis?.contributorLearned ? (
-                          <p className="text-xs text-slate-200 leading-relaxed italic">
+                          <p className="text-xs text-slate-200 leading-relaxed italic font-sans">
                             &quot;{selectedReviewItem.analysis.contributorLearned}&quot;
                           </p>
                         ) : (
-                          <p className="text-xs text-slate-500 italic font-mono">No contributor reflection added yet.</p>
+                          <p className="text-xs text-slate-500 italic">No contributor reflection added yet.</p>
                         )}
                       </div>
                     </div>
@@ -857,13 +938,13 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
               {/* TAB 4: EVIDENCE PROVENANCE */}
               {detailTab === 'PROVENANCE' && (
                 <div className="space-y-6 font-mono text-xs">
-                  <div className="p-4 rounded-xl border border-amber-900/40 bg-amber-950/10 space-y-2">
-                    <div className="text-amber-400 font-bold uppercase tracking-wider flex items-center gap-2">
-                      <Shield className="w-4 h-4 text-amber-400" />
-                      <span>RR AUDIT PROVENANCE RECORD</span>
+                  <div className="p-4 rounded-xl border border-orange-900/40 bg-orange-950/10 space-y-2">
+                    <div className="text-orange-400 font-bold uppercase tracking-wider flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-orange-400" />
+                      <span>VERIFIED GITHUB EVIDENCE VS AI INTERPRETATION</span>
                     </div>
                     <p className="text-slate-300 font-sans text-xs">
-                      This contribution is recorded on Repo Rescue&apos;s points ledger and audited against GitHub evidence.
+                      Facts obtained directly from GitHub API vs AI engineering inferences derived from code diffs.
                     </p>
                   </div>
 
@@ -913,21 +994,21 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
               )}
             </div>
 
-            {/* RIGHT COLUMN (30%): STICKY RR AUDIT & VERIFICATION RAIL (Requirement 1 & 5) */}
+            {/* RIGHT COLUMN (30%): STICKY RR AUDIT RAIL */}
             <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-8 font-mono text-xs">
 
               {/* RR AUDIT BOX */}
               {selectedReviewItem.status === 'MERGED_AND_AUDITED' ? (
-                <div className="p-5 rounded-2xl border border-amber-900/50 bg-amber-950/10 space-y-4">
-                  <div className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2 border-b border-amber-900/40 pb-3">
-                    <Shield className="w-4 h-4 text-amber-400" />
+                <div className="p-5 rounded-2xl border border-orange-500/30 bg-orange-500/5 space-y-4">
+                  <div className="text-[11px] font-bold text-orange-400 uppercase tracking-wider flex items-center gap-2 border-b border-orange-500/20 pb-3">
+                    <Shield className="w-4 h-4 text-orange-500" />
                     <span>AUTHORITATIVE RR AUDIT</span>
                   </div>
 
                   <div className="space-y-3">
                     <div>
                       <div className="text-[10px] text-emerald-400 font-bold uppercase">STATUS</div>
-                      <div className="text-sm font-bold text-emerald-300">VERIFIED</div>
+                      <div className="text-sm font-bold text-emerald-300">✓ VERIFIED CONTRIBUTION</div>
                     </div>
 
                     {selectedReviewItem.linkedIssueNumber && (
@@ -938,8 +1019,8 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                     )}
 
                     <div>
-                      <div className="text-[10px] text-amber-400/80 font-bold uppercase">RR POINTS</div>
-                      <div className="text-3xl font-black text-amber-300">+{selectedReviewItem.rrPoints}</div>
+                      <div className="text-[10px] text-orange-400/90 font-bold uppercase">RR POINTS</div>
+                      <div className="text-3xl font-black text-orange-400">+{selectedReviewItem.rrPoints}</div>
                     </div>
 
                     <div>
@@ -949,10 +1030,6 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                       </div>
                     </div>
                   </div>
-
-                  <p className="text-[11px] text-slate-400 italic pt-2 border-t border-amber-900/30">
-                    &quot;Verified through PointsLedger &amp; contribution pipeline.&quot;
-                  </p>
                 </div>
               ) : (
                 <div className="p-5 rounded-2xl border border-slate-800 bg-slate-950 space-y-4">
@@ -963,8 +1040,8 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
 
                   <div className="space-y-3">
                     <div>
-                      <div className="text-[10px] text-amber-400 font-bold uppercase">STATUS</div>
-                      <div className="text-sm font-bold text-amber-300">NOT ELIGIBLE</div>
+                      <div className="text-[10px] text-orange-400 font-bold uppercase">STATUS</div>
+                      <div className="text-sm font-bold text-slate-300">RR INELIGIBLE</div>
                     </div>
 
                     <div>
@@ -985,10 +1062,6 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                       <div className="text-3xl font-black text-slate-400">+0</div>
                     </div>
                   </div>
-
-                  <p className="text-[11px] text-slate-500 italic pt-2 border-t border-slate-800">
-                    &quot;Recorded in GitHub activity log. Not eligible for RR Points.&quot;
-                  </p>
                 </div>
               )}
 
@@ -1011,32 +1084,11 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                   </div>
                   <div className="flex items-center justify-between">
                     <span>Points Ledger:</span>
-                    <span className="text-emerald-400 font-bold">✓ Verified</span>
+                    <span className={selectedReviewItem.status === 'MERGED_AND_AUDITED' ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                      {selectedReviewItem.status === 'MERGED_AND_AUDITED' ? '✓ Verified' : 'N/A'}
+                    </span>
                   </div>
                 </div>
-              </div>
-
-              {/* QUICK LINKS */}
-              <div className="p-5 rounded-2xl border border-slate-800 bg-[#080c14] space-y-2">
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">EVIDENCE LINKS</div>
-                <a
-                  href={selectedReviewItem.prUrl || '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between p-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 transition-colors"
-                >
-                  <span>Pull Request #{selectedReviewItem.prNumber || 'link'}</span>
-                  <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
-                </a>
-                <a
-                  href={selectedReviewItem.repoUrl || '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between p-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 transition-colors"
-                >
-                  <span className="truncate max-w-[180px]">{selectedReviewItem.repoFullName}</span>
-                  <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
-                </a>
               </div>
 
             </div>
@@ -1050,42 +1102,28 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
 
   // 2. MAIN ENGINEERING JOURNAL VIEW
   return (
-    <div className="min-h-screen bg-[#06080e] text-slate-100 py-10 px-4 sm:px-6 lg:px-8 font-sans selection:bg-emerald-500/30 selection:text-emerald-200">
-      <div className="max-w-6xl mx-auto space-y-10">
+    <div className="min-h-screen bg-[#06080e] text-slate-100 py-10 px-4 sm:px-6 lg:px-8 font-sans selection:bg-orange-500/30 selection:text-orange-200">
+      <div className="max-w-6xl mx-auto space-y-8">
 
-        {/* PAGE HEADER */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-slate-800/80 pb-8">
-          <div className="space-y-3">
-            {/* Tagline & Trust Indicator (Requirement 1) */}
-            <div className="flex items-center gap-3 font-mono text-xs">
-              <span className="text-emerald-400 font-bold uppercase tracking-widest text-[11px]">
-                ENGINEERING JOURNAL
-              </span>
-              <span className="text-slate-600">·</span>
-              <span className="text-slate-400 font-medium text-[11px]">
-                VERIFIED OPEN-SOURCE WORK
-              </span>
-              <div className="ml-auto md:ml-2 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-800/70 text-emerald-300 text-[10px] font-bold">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                <span>AUDIT SYSTEM ACTIVE</span>
-              </div>
+        {/* SECTION 4: ENGINEERING JOURNAL HEADER */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-slate-800/80 pb-6">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 font-mono text-xs text-orange-500 font-bold tracking-wider uppercase">
+              <Sparkles className="w-4 h-4 text-orange-500" />
+              <span>REPO RESCUE</span>
             </div>
 
-            {/* Editorial Headline */}
+            {/* Title & Subtitle */}
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight font-mono">
-              Verified Engineering Contribution Log
+              Engineering Journal
             </h1>
 
-            {/* Editorial Supporting Sentence */}
-            <p className="text-sm sm:text-base text-slate-400 max-w-2xl leading-relaxed">
-              An evidence-backed record of what you built, changed, and shipped.
+            <p className="text-sm sm:text-base text-slate-400 max-w-2xl leading-relaxed font-sans">
+              Your complete GitHub engineering history, powered by AI analysis.
             </p>
           </div>
 
-          {/* Contributor Profile Badge */}
+          {/* Contributor Profile & Sync Badge */}
           <div className="shrink-0 flex items-center gap-3.5 p-3 rounded-xl border border-slate-800/90 bg-[#080c14] shadow-xl font-mono text-xs">
             <img
               src={user.image || 'https://avatars.githubusercontent.com/u/583231?v=4'}
@@ -1095,80 +1133,65 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
             <div className="flex flex-col space-y-0.5">
               <span className="font-bold text-slate-100 text-sm">@{user.githubUsername}</span>
               <div className="flex items-center gap-2">
-                <span className="text-amber-400 font-bold">{totalRrPoints.toLocaleString()} RR Points</span>
+                <span className="text-orange-400 font-bold">{totalRrPoints.toLocaleString()} RR Points</span>
               </div>
+              {user.lastSyncedAt && (
+                <div className="text-[10px] text-slate-500">
+                  Synced: {new Date(user.lastSyncedAt).toLocaleDateString()}
+                </div>
+              )}
             </div>
           </div>
         </div>
 
         {/* Real-time GitHub Activity Sync Status Banner */}
         {(currentSyncStatus === 'RUNNING' || user.contributorSyncStatus === 'RUNNING') && (
-          <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-300 text-xs font-mono flex items-center justify-between gap-4 animate-pulse">
+          <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-300 text-xs font-mono flex items-center justify-between gap-4 animate-pulse">
             <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-blue-400 animate-spin" />
-              <span>Syncing GitHub pull requests & auditing verified contributions...</span>
+              <Clock className="w-4 h-4 text-orange-400 animate-spin" />
+              <span>Syncing GitHub pull requests &amp; auditing verified contributions...</span>
             </div>
-            <span className="text-[11px] text-blue-400 font-bold">Sync Active</span>
+            <span className="text-[11px] text-orange-400 font-bold">Sync Active</span>
           </div>
         )}
 
-        {/* TOP-LEVEL JOURNAL SUMMARY STRIP (Requirement 5 & 7) */}
+        {/* SECTION 5: FILTER BAR */}
         <div className="space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono">
-            {/* Verified Contributions */}
-            <div className="p-4 rounded-xl border border-slate-800/90 bg-[#080c14] space-y-1">
-              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">VERIFIED CONTRIBUTIONS</div>
-              <div className="text-2xl font-black text-white">{verifiedContributionsCount}</div>
-              <div className="text-[10px] text-emerald-400 flex items-center gap-1 font-semibold">
-                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                <span>Audited PRs</span>
-              </div>
-            </div>
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-2 rounded-xl border border-slate-800/80 bg-[#080c14]/90 backdrop-blur-xl font-mono text-xs">
 
-            {/* RR Points */}
-            <div className="p-4 rounded-xl border border-amber-900/40 bg-amber-950/10 space-y-1">
-              <div className="text-[10px] uppercase tracking-wider text-amber-400/90 font-semibold">RR POINTS</div>
-              <div className="text-2xl font-black text-amber-300">+{totalRrPoints.toLocaleString()}</div>
-              <div className="text-[10px] text-amber-400/70">Authoritative Ledger</div>
-            </div>
-
-            {/* Repositories */}
-            <div className="p-4 rounded-xl border border-slate-800/90 bg-[#080c14] space-y-1">
-              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">REPOSITORIES</div>
-              <div className="text-2xl font-black text-blue-400">{uniqueReposCount}</div>
-              <div className="text-[10px] text-slate-500">Unique Codebases</div>
-            </div>
-
-            {/* Avg RR Difficulty */}
-            <div className="p-4 rounded-xl border border-slate-800/90 bg-[#080c14] space-y-1">
-              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">AVG RR DIFFICULTY</div>
-              <div className="text-2xl font-black text-rose-400">
-                {avgRrDifficulty.toFixed(1)} <span className="text-xs text-slate-500 font-normal">/ 10</span>
-              </div>
-              <div className="text-[10px] text-slate-500">RR Difficulty Matrix</div>
-            </div>
-          </div>
-
-          {/* SEARCH & STATUS FILTER CONTROLS */}
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-3 rounded-xl border border-slate-800/80 bg-[#080c14]/80 backdrop-blur-xl font-mono text-xs">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-slate-400 font-bold mr-1">FILTER:</span>
-              {(['ALL', 'MERGED', 'OPEN', 'CLOSED'] as const).map((filter) => (
+            {/* COMPACT FILTER TABS WITH REAL COUNTS */}
+            <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
+              {[
+                { id: 'ALL', label: 'All PRs', count: allCount },
+                { id: 'MERGED', label: 'Merged', count: mergedCount },
+                { id: 'OPEN', label: 'Open', count: openCount },
+                { id: 'CLOSED', label: 'Closed', count: closedCount },
+                { id: 'DRAFT', label: 'Draft', count: draftCount },
+              ].map((tab) => (
                 <button
-                  key={filter}
-                  onClick={() => setStatusFilter(filter)}
-                  className={`px-3 py-1.5 rounded-lg font-bold transition-all text-xs ${
-                    statusFilter === filter
-                      ? 'bg-slate-800 text-white border border-slate-700 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
+                  key={tab.id}
+                  onClick={() => setStatusFilter(tab.id as any)}
+                  className={`px-3.5 py-2 rounded-lg font-bold transition-all text-xs flex items-center gap-2 ${
+                    statusFilter === tab.id
+                      ? 'bg-orange-500/15 text-orange-400 border border-orange-500/40 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
                   }`}
                 >
-                  {filter}
+                  <span>{tab.label}</span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                      statusFilter === tab.id
+                        ? 'bg-orange-500/30 text-orange-300'
+                        : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
                 </button>
               ))}
 
               {selectedTechniqueFilter && (
-                <div className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-950 border border-emerald-700/60 text-emerald-300 font-bold ml-2">
+                <div className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-orange-950 border border-orange-700/60 text-orange-300 font-bold ml-2">
                   <span>{selectedTechniqueFilter}</span>
                   <button onClick={() => setSelectedTechniqueFilter(null)} className="hover:text-white">
                     <X className="w-3 h-3" />
@@ -1177,14 +1200,15 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
               )}
             </div>
 
+            {/* SEARCH INPUT */}
             <div className="relative w-full md:w-64">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
               <input
                 type="text"
-                placeholder="Search diffs, PRs..."
+                placeholder="Search PRs, diffs, code..."
                 value={filterQuery}
                 onChange={(e) => setFilterQuery(e.target.value)}
-                className="w-full pl-9 pr-7 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors text-xs"
+                className="w-full pl-9 pr-7 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-orange-500 transition-colors text-xs font-mono"
               />
               {filterQuery && (
                 <button onClick={() => setFilterQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
@@ -1192,12 +1216,12 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                 </button>
               )}
             </div>
+
           </div>
         </div>
 
-        {/* PR HISTORY / TIMELINE */}
+        {/* SECTION 6: PR CARDS LIST */}
         {displayHistory.length === 0 ? (
-          /* EMPTY DISCOVERY STATE */
           <div className="p-12 rounded-2xl border border-slate-800 bg-[#080c14] text-center font-mono space-y-4">
             <div className="w-14 h-14 mx-auto rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500">
               <BookOpen className="w-7 h-7" />
@@ -1211,7 +1235,7 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
             <div className="pt-2">
               <Link
                 href="/issues"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-bold text-xs text-white shadow-lg transition-all"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-500 font-bold text-xs text-white shadow-lg transition-all"
               >
                 <Code2 className="w-4 h-4" />
                 <span>Explore Open Issues</span>
@@ -1220,245 +1244,308 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
           </div>
         ) : (
           <div className="space-y-6">
-            <div className="flex items-center justify-between font-mono text-xs">
-              <span className="font-bold text-slate-400 tracking-wider uppercase flex items-center gap-2">
-                <Activity className="w-4 h-4 text-emerald-400" />
-                GITHUB PR HISTORY &amp; AUDIT LOG ({displayHistory.length})
-              </span>
-              <span className="text-slate-500">All discovered pull requests</span>
-            </div>
+            {displayHistory.map((item) => {
+              const isVerified = item.status === 'MERGED_AND_AUDITED';
+              const isMerged = item.prStatus === 'MERGED';
+              const isOpen = item.prStatus === 'OPEN';
+              const isClosed = item.prStatus === 'CLOSED';
+              const hasLinkedIssue = Boolean(item.linkedIssueNumber);
 
-            {/* TIMELINE CONNECTOR SPINE */}
-            <div className="relative border-l border-slate-800/80 ml-3 sm:ml-6 pl-6 sm:pl-8 space-y-8 font-sans">
-              {displayHistory.map((item, index) => {
-                const dateParts = getTimelineDateParts(item);
-                const prevItem = index > 0 ? displayHistory[index - 1] : null;
-                const prevDateParts = prevItem ? getTimelineDateParts(prevItem) : null;
-                const showYearHeader = !prevDateParts || prevDateParts.year !== dateParts.year;
+              const repoFullNameParts = item.repoFullName ? item.repoFullName.split('/') : ['github', 'repository'];
+              const orgName = item.orgName || repoFullNameParts[0] || 'github';
+              const repoName = repoFullNameParts[1] || item.repoFullName;
 
-                const isVerified = item.status === 'MERGED_AND_AUDITED';
-                const isMerged = item.prStatus === 'MERGED';
-                const isOpen = item.prStatus === 'OPEN';
-                const isClosed = item.prStatus === 'CLOSED';
-                const hasLinkedIssue = Boolean(item.linkedIssueNumber);
+              const cardDateStr = formatCardDate(item);
+              const factualBullets = getFactualBullets(item);
+              const engineeringChangeText = getEngineeringChangeSummary(item);
+              const checksPill = getChecksSummaryPill(item);
+              const languages = extractCardLanguages(item);
+              const technologies = extractCardTechnologies(item);
+              const concepts = extractCardConcepts(item);
+              const { prStatusTag, issueTag, assignmentTag } = deriveStatusTags(item);
 
-                const engineeringChangeText = getEngineeringChangeSummary(item);
-                const checksPill = getChecksSummaryPill(item);
-
-                return (
-                  <React.Fragment key={item.id}>
-                    {showYearHeader && (
-                      <div className="relative -ml-[31px] sm:-ml-[39px] pt-4 pb-2 flex items-center gap-3 font-mono">
-                        <div className="w-3.5 h-3.5 rounded-full bg-slate-900 border-2 border-emerald-400 shrink-0 shadow-sm" />
-                        <span className="text-base font-black text-slate-200 tracking-wider">{dateParts.year}</span>
-                        <div className="h-px bg-slate-800/80 flex-1" />
-                      </div>
-                    )}
-
-                    <div className="relative group">
-                      <div className="absolute -left-[31px] sm:-left-[39px] top-6 w-3.5 h-3.5 rounded-full bg-slate-950 border-2 border-slate-600 group-hover:border-emerald-400 group-hover:bg-emerald-950 transition-colors shrink-0" />
-
-                      {/* PR TIMELINE ENTRY CARD */}
-                      <div className="rounded-xl border border-slate-800/90 bg-[#080c14] hover:bg-[#0c101a] hover:border-slate-700/90 shadow-md p-5 space-y-4">
-
-                        {/* REPOSITORY PATH, PR TITLE & BADGES */}
-                        <div className="space-y-1.5 font-mono">
-                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs border-b border-slate-800/60 pb-2.5">
-                            <div className="flex items-center gap-2">
-                              <GithubIcon className="w-3.5 h-3.5 text-slate-400" />
-                              <span className="font-bold text-slate-200">{item.repoFullName}</span>
-                              <span className="text-slate-600">·</span>
-                              <span className="text-emerald-400 font-bold">PR #{item.prNumber || 'open'}</span>
-                            </div>
-
-                            {/* STATE & ELIGIBILITY BADGES */}
-                            <div className="flex items-center gap-2">
-                              {isVerified ? (
-                                <>
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 text-[11px] font-bold">
-                                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                                    <span>MERGED</span>
-                                  </span>
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 text-[11px] font-bold">
-                                    <Shield className="w-3 h-3 text-emerald-400" />
-                                    <span>RR ELIGIBLE / VERIFIED</span>
-                                  </span>
-                                </>
-                              ) : isMerged && !hasLinkedIssue ? (
-                                <>
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 text-[11px] font-bold">
-                                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                                    <span>MERGED</span>
-                                  </span>
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800/60 text-[11px] font-bold" title="No linked GitHub issue">
-                                    <AlertCircle className="w-3 h-3 text-amber-400" />
-                                    <span>RR INELIGIBLE</span>
-                                  </span>
-                                </>
-                              ) : isMerged && hasLinkedIssue ? (
-                                <>
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 text-[11px] font-bold">
-                                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                                    <span>MERGED</span>
-                                  </span>
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800/60 text-[11px] font-bold">
-                                    <AlertCircle className="w-3 h-3 text-amber-400" />
-                                    <span>RR INELIGIBLE</span>
-                                  </span>
-                                </>
-                              ) : isOpen ? (
-                                <>
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800 text-[11px] font-bold">
-                                    <Clock className="w-3 h-3 text-blue-400" />
-                                    <span>OPEN</span>
-                                  </span>
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800 text-[11px] font-bold">
-                                    <span>NOT YET ELIGIBLE</span>
-                                  </span>
-                                </>
-                              ) : (
-                                <>
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800 text-[11px] font-bold">
-                                    <X className="w-3 h-3 text-slate-500" />
-                                    <span>CLOSED</span>
-                                  </span>
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800 text-[11px] font-bold">
-                                    <span>NOT ELIGIBLE</span>
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-
-                          <h3 className="text-base font-bold text-white tracking-tight font-sans">
-                            {item.prTitle || item.issueTitle}
-                          </h3>
-                        </div>
-
-                        {/* ENGINEERING CHANGE SUMMARY */}
-                        <div className="p-3.5 rounded-lg border border-slate-800/90 bg-[#050810] space-y-1 font-mono">
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                            <Terminal className="w-3 h-3 text-emerald-400" />
-                            <span>ENGINEERING CHANGE</span>
-                          </div>
-                          <p className="text-xs text-slate-200 leading-relaxed font-sans">
-                            {engineeringChangeText}
-                          </p>
-                        </div>
-
-                        {/* FOOTPRINT & RR AUDIT REWARD STRIP */}
-                        <div className="flex flex-wrap items-center justify-between gap-3 pt-1 font-mono text-xs border-t border-slate-800/40">
-                          <div className="flex flex-wrap items-center gap-4 text-slate-300 text-[11px]">
-                            <div className="flex items-center gap-1.5">
-                              <FileCode className="w-3.5 h-3.5 text-slate-400" />
-                              <span>
-                                <strong className="text-slate-100">{item.filesChanged}</strong> {item.filesChanged === 1 ? 'file' : 'files'}
-                              </span>
-                              <span className="text-slate-600">·</span>
-                              <span className="text-emerald-400 font-bold">+{item.linesAdded}</span>
-                              <span className="text-rose-400 font-bold">-{item.linesDeleted}</span>
-                            </div>
-
-                            <div className="flex items-center gap-1">
-                              <CheckCircle2 className={`w-3.5 h-3.5 ${checksPill.passed ? 'text-emerald-400' : 'text-amber-400'}`} />
-                              <span className={checksPill.passed ? 'text-emerald-300 font-semibold' : 'text-amber-300 font-semibold'}>
-                                {checksPill.text}
-                              </span>
-                            </div>
-
-                            {isVerified ? (
-                              <div className="flex items-center gap-1 text-amber-300 font-bold">
-                                <Shield className="w-3.5 h-3.5 text-amber-400" />
-                                <span>+{item.rrPoints} RR POINTS</span>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1 text-slate-400 font-semibold text-[11px]">
-                                <Shield className="w-3.5 h-3.5 text-slate-500" />
-                                <span>0 RR POINTS</span>
-                                {isMerged && !hasLinkedIssue && (
-                                  <span className="text-amber-400/90 text-[10px] ml-1">· No linked GitHub issue</span>
-                                )}
-                                {isOpen && (
-                                  <span className="text-blue-400/90 text-[10px] ml-1">· PR is not yet merged</span>
-                                )}
-                                {isClosed && (
-                                  <span className="text-slate-500 text-[10px] ml-1">· PR closed without merging</span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* [OPEN ENGINEERING REVIEW →] */}
-                          <button
-                            onClick={() => openEngineeringReview(item)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/60 font-bold text-xs transition-all shadow-sm group"
-                          >
-                            <span>OPEN ENGINEERING REVIEW</span>
-                            <ArrowRight className="w-3 h-3 text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
-                          </button>
-                        </div>
-                      </div>
+              return (
+                <div
+                  key={item.id}
+                  className="rounded-2xl border border-slate-800/90 bg-[#080c14] hover:border-slate-700 transition-all shadow-xl p-6 space-y-5"
+                >
+                  {/* SECTION 7: ORGANIZATION / REPOSITORY & DATE */}
+                  <div className="flex items-center justify-between font-mono text-xs border-b border-slate-800/80 pb-3">
+                    <div className="flex items-center gap-2">
+                      <GithubIcon className="w-4 h-4 text-slate-400" />
+                      <a
+                        href={`https://github.com/${orgName}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-slate-400 hover:text-orange-400 transition-colors font-semibold"
+                      >
+                        {orgName}
+                      </a>
+                      <span className="text-slate-600">/</span>
+                      <a
+                        href={item.repoUrl || `https://github.com/${item.repoFullName}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-bold text-slate-100 hover:text-orange-400 transition-colors"
+                      >
+                        {repoName}
+                      </a>
                     </div>
-                  </React.Fragment>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
-        {/* SEPARATE SECTION: DISCOVERED GITHUB ACTIVITY (Requirement 6 & 7) */}
-        {discoveredHistory.length > 0 && (
-          <div className="space-y-4 pt-8 border-t border-slate-800/80 font-mono text-xs">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                <Clock className="w-4 h-4 text-slate-500" />
-                DISCOVERED ACTIVITY ({discoveredHistory.length})
-              </span>
-              <span className="text-slate-500 text-[11px]">Unverified pull requests from GitHub sync</span>
-            </div>
-
-            <div className="space-y-2">
-              {discoveredHistory.map((item) => (
-                <div key={item.id} className="p-3.5 rounded-xl border border-slate-800/80 bg-[#070a12] flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2 font-bold text-slate-300">
-                      <span>{item.repoFullName}</span>
-                      <span className="text-slate-600">·</span>
-                      <span className="text-slate-400">PR #{item.prNumber || 'open'}</span>
+                    <div className="text-slate-400 text-xs font-medium">
+                      {cardDateStr}
                     </div>
-                    <div className="text-slate-400 font-sans text-xs">{item.prTitle || item.issueTitle}</div>
                   </div>
-                  <span className="px-2 py-1 rounded bg-slate-900 text-slate-400 border border-slate-800 text-[10px] font-bold">
-                    UNVERIFIED ACTIVITY
-                  </span>
+
+                  {/* SECTION 8: PR NUMBER & TITLE */}
+                  <div className="space-y-2">
+                    <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-snug">
+                      <span className="text-orange-500 font-mono mr-2">#{item.prNumber}</span>
+                      {item.prTitle || item.issueTitle}
+                    </h3>
+
+                    {/* SECTION 9: STATUS TAG SYSTEM */}
+                    <div className="flex flex-wrap items-center gap-2 font-mono text-xs pt-0.5">
+                      <span className={`px-2.5 py-1 rounded-md border font-bold text-[11px] ${prStatusTag.style}`}>
+                        {prStatusTag.label}
+                      </span>
+                      <span className={`px-2.5 py-1 rounded-md border font-bold text-[11px] ${issueTag.style}`}>
+                        {issueTag.label}
+                      </span>
+                      <span className={`px-2.5 py-1 rounded-md border font-bold text-[11px] ${assignmentTag.style}`}>
+                        {assignmentTag.label}
+                      </span>
+                      {item.isPartner && (
+                        <span className="px-2.5 py-1 rounded-md bg-purple-950/80 text-purple-300 border border-purple-800/60 font-bold text-[11px]">
+                          PARTNER REPO
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* SECTION 6 & 10: MAIN CONTENT & RR STATUS PANEL SPLIT */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+                    {/* LEFT COLUMN (~75%): WHAT CHANGED & TECH STACK */}
+                    <div className="lg:col-span-8 space-y-4">
+                      {/* SHORT SUMMARY & WHAT CHANGED */}
+                      <div className="p-4 rounded-xl border border-slate-800/90 bg-[#050810] space-y-2 font-mono">
+                        <div className="text-[11px] font-extrabold text-orange-400 uppercase tracking-wider flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <Terminal className="w-3.5 h-3.5 text-orange-500" />
+                            <span>AI CHANGE ANALYSIS · SHORT SUMMARY</span>
+                          </div>
+                        </div>
+                        <p className="text-xs font-semibold text-slate-100 font-sans leading-relaxed border-b border-slate-800/60 pb-2">
+                          &quot;{engineeringChangeText}&quot;
+                        </p>
+                        <ul className="space-y-1.5 font-sans text-xs text-slate-200 pt-1">
+                          {factualBullets.map((bullet, bIdx) => (
+                            <li key={bIdx} className="flex items-start gap-2">
+                              <span className="text-orange-500 font-bold font-mono mt-0.5">•</span>
+                              <span className="leading-relaxed">{bullet}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* LANGUAGES · TECHNOLOGIES · CORE CONCEPTS */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono text-xs">
+                        {/* LANGUAGES */}
+                        <div className="space-y-1.5">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">LANGUAGES</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {languages.map((lang) => (
+                              <span key={lang} className="px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-slate-200 font-semibold text-xs">
+                                {lang}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* TECHNOLOGIES */}
+                        <div className="space-y-1.5">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">TECHNOLOGIES</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {technologies.map((tech) => (
+                              <span key={tech} className="px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-slate-200 font-semibold text-xs">
+                                {tech}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* CORE CONCEPTS */}
+                        <div className="space-y-1.5">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">CORE CONCEPTS</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {concepts.map((concept) => (
+                              <span key={concept} className="px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-slate-200 font-semibold text-xs">
+                                {concept}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* SECTION 10: RIGHT COLUMN (~25%): RR STATUS PANEL */}
+                    <div className="lg:col-span-4 font-mono text-xs h-full">
+                      {isVerified ? (
+                        <div className="p-4 rounded-xl border border-orange-500/30 bg-orange-500/5 space-y-3">
+                          <div className="flex items-center gap-1.5 text-xs font-extrabold text-orange-400 uppercase tracking-wider border-b border-orange-500/20 pb-2">
+                            <CheckCircle2 className="w-4 h-4 text-orange-500" />
+                            <span>✓ Verified Contribution</span>
+                          </div>
+
+                          <div className="space-y-2">
+                            <div>
+                              <div className="text-[10px] text-slate-400 uppercase font-semibold">RR DIFFICULTY</div>
+                              <div className="text-lg font-black text-white">
+                                {item.rrDifficulty.toFixed(1)} <span className="text-xs text-slate-500 font-normal">/ 10</span>
+                              </div>
+                            </div>
+
+                            <div>
+                              <div className="text-[10px] text-orange-400/90 uppercase font-semibold">RR POINTS</div>
+                              <div className="text-2xl font-black text-orange-400">+{item.rrPoints}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/90 space-y-3">
+                          <div className="flex items-center gap-1.5 text-xs font-extrabold text-slate-400 uppercase tracking-wider border-b border-slate-800 pb-2">
+                            <AlertCircle className="w-4 h-4 text-slate-500" />
+                            <span>RR Ineligible</span>
+                          </div>
+
+                          <div className="space-y-2">
+                            <div>
+                              <div className="text-[10px] text-slate-500 uppercase font-semibold">REASON</div>
+                              <div className="text-xs font-bold text-slate-300">
+                                {isMerged && !hasLinkedIssue
+                                  ? 'No linked GitHub issue'
+                                  : isOpen
+                                  ? 'PR is not yet merged'
+                                  : isClosed
+                                  ? 'PR closed without merging'
+                                  : 'Verification checks failed'}
+                              </div>
+                            </div>
+
+                            <div>
+                              <div className="text-[10px] text-slate-500 uppercase font-semibold">RR POINTS</div>
+                              <div className="text-2xl font-black text-slate-400">+0</div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                  </div>
+
+                  {/* SECTION 14 & 18: FOOTER STRIP: CHECKS, FOOTPRINT & DIRECT GITHUB LINKS */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800/80 font-mono text-xs">
+
+                    {/* LEFT: CHECKS & FOOTPRINT */}
+                    <div className="flex flex-wrap items-center gap-3 text-slate-400 text-xs">
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-[11px]">
+                        <CheckCircle2 className={`w-3.5 h-3.5 ${checksPill.passed ? 'text-emerald-400' : 'text-amber-400'}`} />
+                        <span className={checksPill.passed ? 'text-emerald-300 font-semibold' : 'text-amber-300 font-semibold'}>
+                          {checksPill.text}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1 text-[11px]">
+                        <FileCode className="w-3.5 h-3.5 text-slate-500" />
+                        <span>
+                          <strong className="text-slate-200">{item.filesChanged}</strong> {item.filesChanged === 1 ? 'file' : 'files'}
+                        </span>
+                        <span className="text-slate-600">·</span>
+                        <span className="text-emerald-400 font-bold">+{item.linesAdded}</span>
+                        <span className="text-rose-400 font-bold">-{item.linesDeleted}</span>
+                      </div>
+                    </div>
+
+                    {/* RIGHT: DIRECT LINKS & EXPAND ACTION */}
+                    <div className="flex items-center gap-2">
+                      {item.linkedIssueUrl && item.linkedIssueNumber ? (
+                        <a
+                          href={item.linkedIssueUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-semibold text-xs transition-colors"
+                        >
+                          <span>Issue ↗</span>
+                        </a>
+                      ) : null}
+
+                      <a
+                        href={item.prUrl || '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-semibold text-xs transition-colors"
+                      >
+                        <span>PR ↗</span>
+                      </a>
+
+                      <a
+                        href={item.repoUrl || `https://github.com/${item.repoFullName}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-semibold text-xs transition-colors"
+                      >
+                        <span>Repo ↗</span>
+                      </a>
+
+                      <a
+                        href={`https://github.com/${orgName}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-semibold text-xs transition-colors"
+                      >
+                        <span>Org ↗</span>
+                      </a>
+
+                      <button
+                        onClick={() => openEngineeringReview(item)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/30 font-bold text-xs transition-colors ml-1"
+                      >
+                        <span>Deep Evidence</span>
+                        <ArrowRight className="w-3 h-3 text-orange-400" />
+                      </button>
+                    </div>
+
+                  </div>
+
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
         )}
 
-        {/* ENGINEERING DNA & OBSERVED EVIDENCE SECTION (Requirement 3, 4, 7) */}
+        {/* SECTION 23: ENGINEERING DNA & OBSERVED EVIDENCE SECTION */}
         <div className="space-y-6 pt-10 border-t border-slate-800/80 font-mono">
           <div>
-            <div className="flex items-center gap-2 text-xs text-purple-400 font-bold mb-1">
+            <div className="flex items-center gap-2 text-xs text-orange-400 font-bold mb-1">
               <Cpu className="w-4 h-4" />
               <span>VERIFIED EVIDENCE SIGNAL</span>
             </div>
             <h2 className="text-2xl font-black text-white tracking-tight">
               YOUR ENGINEERING DNA
             </h2>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-400 mt-1 font-sans">
               Factual technical techniques and language observations derived exclusively from verified code contributions.
             </p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
-            {/* VERIFIED TECHNIQUES WITH SUPPORTING EVIDENCE EXPOSURE (Requirement 4) */}
+            {/* VERIFIED TECHNIQUES WITH SUPPORTING EVIDENCE EXPOSURE */}
             <div className="p-6 rounded-2xl border border-slate-800 bg-[#080c14] space-y-4">
               <h3 className="text-sm font-bold text-white flex items-center justify-between">
                 <span className="flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-purple-400" />
+                  <Layers className="w-4 h-4 text-orange-400" />
                   Verified Engineering Techniques
                 </span>
                 <span className="text-xs text-slate-500">Diff Evidence</span>
@@ -1475,7 +1562,7 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                     >
                       <div className="space-y-0.5">
                         <div className="text-xs font-bold text-slate-100">{tech.name}</div>
-                        <div className="text-[10px] text-emerald-400 font-semibold">
+                        <div className="text-[10px] text-orange-400 font-semibold">
                           Verified evidence · {tech.filesCount} file(s) across {tech.count} contribution(s)
                         </div>
                       </div>
@@ -1492,7 +1579,7 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
               </div>
             </div>
 
-            {/* LANGUAGES OBSERVED (NO PROFICIENCY / SKILL PROGRESS BARS) (Requirement 3) */}
+            {/* LANGUAGES OBSERVED (NO PROFICIENCY / SKILL PROGRESS BARS) */}
             <div className="p-6 rounded-2xl border border-slate-800 bg-[#080c14] space-y-5">
               <h3 className="text-sm font-bold text-white flex items-center justify-between">
                 <span className="flex items-center gap-2">
@@ -1522,101 +1609,6 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
         </div>
 
       </div>
-
-      {/* EDIT ANALYSIS MODAL */}
-      {editingAnalysisId && (
-        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 font-mono">
-          <div className="max-w-2xl w-full p-6 rounded-2xl border border-slate-800 bg-[#080c14] shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Edit3 className="w-4 h-4 text-blue-400" />
-                Edit Case Study Analysis
-              </h3>
-              <button onClick={() => setEditingAnalysisId(null)} className="text-slate-500 hover:text-slate-300">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4 text-xs">
-              <div className="space-y-1">
-                <label className="font-bold text-slate-300 uppercase">Problem Summary</label>
-                <textarea
-                  rows={2}
-                  value={analysisEditForm.problem}
-                  onChange={(e) => setAnalysisEditForm({ ...analysisEditForm, problem: e.target.value })}
-                  className="w-full p-3 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-slate-300 uppercase">Investigation Narrative</label>
-                <textarea
-                  rows={3}
-                  value={analysisEditForm.investigation}
-                  onChange={(e) => setAnalysisEditForm({ ...analysisEditForm, investigation: e.target.value })}
-                  className="w-full p-3 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-slate-300 uppercase">Implementation Approach</label>
-                <textarea
-                  rows={3}
-                  value={analysisEditForm.approach}
-                  onChange={(e) => setAnalysisEditForm({ ...analysisEditForm, approach: e.target.value })}
-                  className="w-full p-3 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-slate-300 uppercase">Techniques (Comma-separated)</label>
-                <input
-                  type="text"
-                  value={analysisEditForm.techniques}
-                  onChange={(e) => setAnalysisEditForm({ ...analysisEditForm, techniques: e.target.value })}
-                  className="w-full p-3 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-slate-300 uppercase">Trade-offs & Considerations</label>
-                <textarea
-                  rows={2}
-                  value={analysisEditForm.tradeoffs}
-                  onChange={(e) => setAnalysisEditForm({ ...analysisEditForm, tradeoffs: e.target.value })}
-                  className="w-full p-3 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-slate-300 uppercase">Verified Result</label>
-                <textarea
-                  rows={2}
-                  value={analysisEditForm.result}
-                  onChange={(e) => setAnalysisEditForm({ ...analysisEditForm, result: e.target.value })}
-                  className="w-full p-3 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-blue-500"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 border-t border-slate-800 pt-4 text-xs">
-              <button
-                onClick={() => setEditingAnalysisId(null)}
-                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleSaveAnalysisEdit(editingAnalysisId)}
-                disabled={savingAnalysis}
-                className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold disabled:opacity-50"
-              >
-                {savingAnalysis ? 'Saving...' : 'Save & Mark Contributor Edited'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

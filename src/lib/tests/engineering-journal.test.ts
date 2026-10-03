@@ -1,6 +1,6 @@
 import { CaseStudyAnalysisSchema } from '../ai/case-study-schema';
 import { synthesizeEvidenceAnalysis, CURRENT_CASE_STUDY_VERSION } from '../ai/case-study-service';
-import { analyzePullRequestDiff, GitHubPullRequestDiffData, GitHubChecksSummary } from '../ai/diff-analysis-engine';
+import { analyzePullRequestDiff, extractHunkAtomicChanges, GitHubPullRequestDiffData, GitHubChecksSummary } from '../ai/diff-analysis-engine';
 
 function runEngineeringJournalTests() {
   console.log('🧪 Running Deep GitHub Evidence Engineering Journal v3 Test Suite...\n');
@@ -385,7 +385,127 @@ function runEngineeringJournalTests() {
     'Test 18 (Historical contribution): Contributor sync awards authoritative RR Points independently of AI analysis'
   );
 
-  console.log(`\n📊 18-Test Deep Evidence Engineering Suite Results: ${passed} passed, ${failed} failed.`);
+  // 19. Atomic Extraction Edge Case 1: Syntax Correction (prin -> print)
+  const syntaxPatch = "@@ -1,2 +1,2 @@\n-prin(first_name)\n+print(first_name) #this will print the value of first name";
+  const syntaxRes = extractHunkAtomicChanges("Python/2_Variables.py", syntaxPatch, "modified");
+  assert(
+    syntaxRes.atomicChanges.some((c) => c.meaning.includes("Corrected function call from prin() to print()")),
+    "Test 19 (Atomic Extraction: Syntax Correction): Extracts prin() -> print() function call correction"
+  );
+
+  // 20. Atomic Extraction Edge Case 2: Async / Await
+  const asyncPatch = "@@ -10,2 +10,3 @@\n-const res = fetchData();\n+const res = await fetchData();";
+  const asyncRes = extractHunkAtomicChanges("src/services/api.ts", asyncPatch, "modified");
+  assert(
+    asyncRes.atomicChanges.some((c) => c.meaning.includes("await")),
+    "Test 20 (Atomic Extraction: Async/Await): Detects addition of await for asynchronous operations"
+  );
+
+  // 21. Atomic Extraction Edge Case 3: Test Assertions
+  const testPatch = "@@ -5,2 +5,4 @@\n+it('should validate output', () => {\n+  expect(res).toBe(true);\n+});";
+  const testRes = extractHunkAtomicChanges("tests/user.test.ts", testPatch, "added");
+  assert(
+    testRes.atomicChanges.some((c) => c.meaning.includes("test assertion")),
+    "Test 21 (Atomic Extraction: Test Assertions): Identifies added test assertion and test case"
+  );
+
+  // 22. Atomic Extraction Edge Case 4: Class Inheritance
+  const classPatch = "@@ -1,2 +1,3 @@\n+class CustomError extends Error {\n+  constructor(msg) { super(msg); }\n+}";
+  const classRes = extractHunkAtomicChanges("src/errors.ts", classPatch, "added");
+  assert(
+    classRes.atomicChanges.some((c) => c.meaning.includes("class CustomError extends Error")),
+    "Test 22 (Atomic Extraction: Class Inheritance): Detects class definition with inheritance"
+  );
+
+  // 23. Atomic Extraction Edge Case 5: React Hooks
+  const hooksPatch = "@@ -1,2 +1,4 @@\n+const [count, setCount] = useState(0);\n+useEffect(() => {}, []);";
+  const hooksRes = extractHunkAtomicChanges("src/components/Counter.tsx", hooksPatch, "modified");
+  assert(
+    hooksRes.atomicChanges.some((c) => c.meaning.includes("React hooks")),
+    "Test 23 (Atomic Extraction: React Hooks): Identifies state management with React hooks"
+  );
+
+  // 24. Atomic Extraction Edge Case 6: Database Schema
+  const schemaPatch = "@@ -10,2 +10,4 @@\n+model User {\n+  id String @id @default(uuid())\n+}";
+  const schemaRes = extractHunkAtomicChanges("prisma/schema.prisma", schemaPatch, "modified");
+  assert(
+    schemaRes.atomicChanges.some((c) => c.meaning.includes("database schema")),
+    "Test 24 (Atomic Extraction: Database Schema): Detects database schema definition changes"
+  );
+
+  // 25. Atomic Extraction Edge Case 7: Whitespace Formatting
+  const whitespacePatch = "@@ -1,2 +1,2 @@\n-const  a = 1;\n+const a = 1;";
+  const whitespaceRes = extractHunkAtomicChanges("src/utils.ts", whitespacePatch, "modified");
+  assert(
+    whitespaceRes.atomicChanges.some((c) => c.meaning.includes("formatting")),
+    "Test 25 (Atomic Extraction: Whitespace Formatting): Identifies whitespace formatting adjustment"
+  );
+
+  // 26. Atomic Extraction Edge Case 8: File Renames
+  const renameRes = extractHunkAtomicChanges("src/new-name.ts", undefined, "renamed");
+  assert(
+    renameRes.fileSummary.includes("Renamed file src/new-name.ts"),
+    "Test 26 (Atomic Extraction: Renames): Handles renamed file without patch gracefully"
+  );
+
+  // 27. Atomic Extraction Edge Case 9: File Deletions
+  const deletedRes = extractHunkAtomicChanges("src/old-file.ts", undefined, "removed");
+  assert(
+    deletedRes.fileSummary.includes("Removed file src/old-file.ts"),
+    "Test 27 (Atomic Extraction: Deletions): Handles removed file without patch gracefully"
+  );
+
+  // 28. Atomic Extraction Edge Case 10: Missing Patches
+  const missingPatchRes = extractHunkAtomicChanges("assets/image.png", undefined, "added");
+  assert(
+    missingPatchRes.fileSummary.includes("Diff unavailable"),
+    "Test 28 (Atomic Extraction: Missing Patches): Handles missing patch without error"
+  );
+
+  // 29. Atomic Extraction Edge Case 11: Multi-file PR Analysis
+  const multiDiffData: GitHubPullRequestDiffData = {
+    files: [
+      { filename: "Python/2_Variables.py", status: "modified", additions: 1, deletions: 1, changes: 2, patch: syntaxPatch },
+      { filename: "README.md", status: "modified", additions: 5, deletions: 0, changes: 5, patch: "@@ -1,1 +1,2 @@\n+# Docs\n+Run python script." }
+    ],
+    totalFiles: 2,
+    totalAdditions: 6,
+    totalDeletions: 1,
+    coverage: "FULL_DIFF",
+    checksSummary: { totalChecks: 0, passedChecks: 0, failedChecks: 0, pendingChecks: 0, checkList: [], statusText: "No checks." }
+  };
+  const multiAnalysis = analyzePullRequestDiff(multiDiffData, "Fix print statement and update docs", 2, "Python-journal-with-projects");
+  assert(
+    multiAnalysis.fileAnalyses.length === 2 && multiAnalysis.engineeringThesis.length > 0,
+    "Test 29 (Multi-file PR Analysis): Generates file-by-file analyses and non-empty short summary"
+  );
+
+  // 30. Real PR #2 Semantic Facts & Diff Grounding
+  const pr2DiffData: GitHubPullRequestDiffData = {
+    files: [
+      {
+        filename: "Python/2_Variables.py",
+        status: "modified",
+        additions: 1,
+        deletions: 1,
+        changes: 2,
+        patch: syntaxPatch
+      }
+    ],
+    totalFiles: 1,
+    totalAdditions: 1,
+    totalDeletions: 1,
+    coverage: "FULL_DIFF",
+    checksSummary: { totalChecks: 0, passedChecks: 0, failedChecks: 0, pendingChecks: 0, checkList: [], statusText: "No checks." }
+  };
+  const pr2Analysis = analyzePullRequestDiff(pr2DiffData, "Print function issue resolved and notes added", 2, "Python-journal-with-projects");
+  assert(
+    pr2Analysis.fileAnalyses[0].summary.includes("Corrected function call from prin() to print()") &&
+    pr2Analysis.engineeringThesis.includes("Corrected function call from prin() to print()"),
+    "Test 30 (Real PR #2 Semantic Facts): Derives exact prin() -> print() correction and short summary from actual diff patch"
+  );
+
+  console.log(`\n📊 30-Test Deep Evidence Engineering Suite Results: ${passed} passed, ${failed} failed.`);
   if (failed > 0) {
     process.exit(1);
   }
