@@ -279,14 +279,14 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
   // Local state to track updated history items
   const [localHistory, setLocalHistory] = useState<ContributionHistoryItem[]>(data.history);
 
-  // SEPARATION: VERIFIED CONTRIBUTIONS vs DISCOVERED ACTIVITY (Requirement 6 & 7)
+  // SEPARATION: VERIFIED CONTRIBUTIONS vs DISCOVERED ACTIVITY
   // A PullRequest record alone is NOT enough. Only actual Contribution records count as verified engineering work.
   const verifiedHistory = localHistory.filter(
-    (item) => item.prStatus === 'MERGED' && item.rrPoints > 0
+    (item) => item.status === 'MERGED_AND_AUDITED'
   );
 
   const discoveredHistory = localHistory.filter(
-    (item) => !(item.prStatus === 'MERGED' && item.rrPoints > 0)
+    (item) => item.status !== 'MERGED_AND_AUDITED'
   );
 
   // Authoritative calculations (Requirement 5, 6, 7)
@@ -448,8 +448,8 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
     }
   };
 
-  // Filter history for timeline view
-  const displayHistory = verifiedHistory.filter((item) => {
+  // Filter history for timeline view across ALL discovered PR activity
+  const displayHistory = localHistory.filter((item) => {
     const searchPrTitle = item.prTitle || item.issueTitle || '';
     const text = `${searchPrTitle} ${item.repoFullName} ${item.area} ${item.category} ${item.techniques.join(' ')}`.toLowerCase();
     const matchesQuery = !filterQuery || text.includes(filterQuery.toLowerCase());
@@ -916,31 +916,81 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
             {/* RIGHT COLUMN (30%): STICKY RR AUDIT & VERIFICATION RAIL (Requirement 1 & 5) */}
             <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-8 font-mono text-xs">
 
-              {/* RR AUDIT BOX (Requirement 5) */}
-              <div className="p-5 rounded-2xl border border-amber-900/50 bg-amber-950/10 space-y-4">
-                <div className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2 border-b border-amber-900/40 pb-3">
-                  <Shield className="w-4 h-4 text-amber-400" />
-                  <span>AUTHORITATIVE RR AUDIT</span>
-                </div>
-
-                <div className="space-y-3">
-                  <div>
-                    <div className="text-[10px] text-amber-400/80 font-bold uppercase">RR POINTS</div>
-                    <div className="text-3xl font-black text-amber-300">+{selectedReviewItem.rrPoints}</div>
+              {/* RR AUDIT BOX */}
+              {selectedReviewItem.status === 'MERGED_AND_AUDITED' ? (
+                <div className="p-5 rounded-2xl border border-amber-900/50 bg-amber-950/10 space-y-4">
+                  <div className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2 border-b border-amber-900/40 pb-3">
+                    <Shield className="w-4 h-4 text-amber-400" />
+                    <span>AUTHORITATIVE RR AUDIT</span>
                   </div>
 
-                  <div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase">RR DIFFICULTY</div>
-                    <div className="text-xl font-bold text-slate-100">
-                      {selectedReviewItem.rrDifficulty.toFixed(1)} <span className="text-xs text-slate-500 font-normal">/ 10</span>
+                  <div className="space-y-3">
+                    <div>
+                      <div className="text-[10px] text-emerald-400 font-bold uppercase">STATUS</div>
+                      <div className="text-sm font-bold text-emerald-300">VERIFIED</div>
+                    </div>
+
+                    {selectedReviewItem.linkedIssueNumber && (
+                      <div>
+                        <div className="text-[10px] text-slate-400 font-bold uppercase">LINKED ISSUE</div>
+                        <div className="text-xs font-bold text-slate-200">#{selectedReviewItem.linkedIssueNumber}</div>
+                      </div>
+                    )}
+
+                    <div>
+                      <div className="text-[10px] text-amber-400/80 font-bold uppercase">RR POINTS</div>
+                      <div className="text-3xl font-black text-amber-300">+{selectedReviewItem.rrPoints}</div>
+                    </div>
+
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase">RR DIFFICULTY</div>
+                      <div className="text-xl font-bold text-slate-100">
+                        {selectedReviewItem.rrDifficulty.toFixed(1)} <span className="text-xs text-slate-500 font-normal">/ 10</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <p className="text-[11px] text-slate-400 italic pt-2 border-t border-amber-900/30">
-                  &quot;Verified through Repo Rescue&apos;s contribution scoring pipeline.&quot;
-                </p>
-              </div>
+                  <p className="text-[11px] text-slate-400 italic pt-2 border-t border-amber-900/30">
+                    &quot;Verified through PointsLedger &amp; contribution pipeline.&quot;
+                  </p>
+                </div>
+              ) : (
+                <div className="p-5 rounded-2xl border border-slate-800 bg-slate-950 space-y-4">
+                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-3">
+                    <Shield className="w-4 h-4 text-slate-500" />
+                    <span>AUTHORITATIVE RR AUDIT</span>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <div className="text-[10px] text-amber-400 font-bold uppercase">STATUS</div>
+                      <div className="text-sm font-bold text-amber-300">NOT ELIGIBLE</div>
+                    </div>
+
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase">REASON</div>
+                      <div className="text-xs font-bold text-slate-300">
+                        {selectedReviewItem.prStatus === 'MERGED' && !selectedReviewItem.linkedIssueNumber
+                          ? 'No linked GitHub issue'
+                          : selectedReviewItem.prStatus === 'OPEN'
+                          ? 'PR is not yet merged'
+                          : selectedReviewItem.prStatus === 'CLOSED'
+                          ? 'PR closed without merging'
+                          : 'Verification checks failed'}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase">RR POINTS</div>
+                      <div className="text-3xl font-black text-slate-400">+0</div>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-slate-500 italic pt-2 border-t border-slate-800">
+                    &quot;Recorded in GitHub activity log. Not eligible for RR Points.&quot;
+                  </p>
+                </div>
+              )}
 
               {/* VERIFICATION SIGNALS BOX */}
               <div className="p-5 rounded-2xl border border-slate-800 bg-[#080c14] space-y-3">
@@ -1099,12 +1149,26 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
             </div>
           </div>
 
-          {/* SEARCH & TECHNIQUE FILTER CONTROLS */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-3 rounded-xl border border-slate-800/80 bg-[#080c14]/80 backdrop-blur-xl font-mono text-xs">
-            <div className="flex items-center gap-2">
-              <span className="text-slate-400 font-bold">FILTER VERIFIED WORK:</span>
+          {/* SEARCH & STATUS FILTER CONTROLS */}
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-3 rounded-xl border border-slate-800/80 bg-[#080c14]/80 backdrop-blur-xl font-mono text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-slate-400 font-bold mr-1">FILTER:</span>
+              {(['ALL', 'MERGED', 'OPEN', 'CLOSED'] as const).map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => setStatusFilter(filter)}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all text-xs ${
+                    statusFilter === filter
+                      ? 'bg-slate-800 text-white border border-slate-700 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {filter}
+                </button>
+              ))}
+
               {selectedTechniqueFilter && (
-                <div className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-950 border border-emerald-700/60 text-emerald-300 font-bold">
+                <div className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-950 border border-emerald-700/60 text-emerald-300 font-bold ml-2">
                   <span>{selectedTechniqueFilter}</span>
                   <button onClick={() => setSelectedTechniqueFilter(null)} className="hover:text-white">
                     <X className="w-3 h-3" />
@@ -1113,7 +1177,7 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
               )}
             </div>
 
-            <div className="relative w-full sm:w-64">
+            <div className="relative w-full md:w-64">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
               <input
                 type="text"
@@ -1131,18 +1195,18 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
           </div>
         </div>
 
-        {/* VERIFIED ENGINEERING WORK TIMELINE (Requirement 6 & 10) */}
-        {verifiedContributionsCount === 0 ? (
-          /* ZERO CONTRIBUTION STATE (Requirement 7) */
+        {/* PR HISTORY / TIMELINE */}
+        {displayHistory.length === 0 ? (
+          /* EMPTY DISCOVERY STATE */
           <div className="p-12 rounded-2xl border border-slate-800 bg-[#080c14] text-center font-mono space-y-4">
             <div className="w-14 h-14 mx-auto rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500">
               <BookOpen className="w-7 h-7" />
             </div>
             <h3 className="text-base font-bold text-slate-200">
-              No verified engineering contributions recorded yet.
+              No pull request activity matching your filter ({statusFilter}).
             </h3>
             <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed font-sans">
-              Repo Rescue audits GitHub pull requests against code diffs and CI checks before awarding RR Points and generating engineering case studies.
+              Repo Rescue automatically discovers all pull requests from your GitHub account and audits merged work with linked issues.
             </p>
             <div className="pt-2">
               <Link
@@ -1159,9 +1223,9 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
             <div className="flex items-center justify-between font-mono text-xs">
               <span className="font-bold text-slate-400 tracking-wider uppercase flex items-center gap-2">
                 <Activity className="w-4 h-4 text-emerald-400" />
-                VERIFIED ENGINEERING WORK ({displayHistory.length})
+                GITHUB PR HISTORY &amp; AUDIT LOG ({displayHistory.length})
               </span>
-              <span className="text-slate-500">Audited against GitHub code diffs & CI checks</span>
+              <span className="text-slate-500">All discovered pull requests</span>
             </div>
 
             {/* TIMELINE CONNECTOR SPINE */}
@@ -1172,7 +1236,12 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                 const prevDateParts = prevItem ? getTimelineDateParts(prevItem) : null;
                 const showYearHeader = !prevDateParts || prevDateParts.year !== dateParts.year;
 
-                const typeInfo = deriveContributionTypeInfo(item);
+                const isVerified = item.status === 'MERGED_AND_AUDITED';
+                const isMerged = item.prStatus === 'MERGED';
+                const isOpen = item.prStatus === 'OPEN';
+                const isClosed = item.prStatus === 'CLOSED';
+                const hasLinkedIssue = Boolean(item.linkedIssueNumber);
+
                 const engineeringChangeText = getEngineeringChangeSummary(item);
                 const checksPill = getChecksSummaryPill(item);
 
@@ -1189,23 +1258,76 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                     <div className="relative group">
                       <div className="absolute -left-[31px] sm:-left-[39px] top-6 w-3.5 h-3.5 rounded-full bg-slate-950 border-2 border-slate-600 group-hover:border-emerald-400 group-hover:bg-emerald-950 transition-colors shrink-0" />
 
-                      {/* CONCISE TIMELINE ENTRY CARD (Requirement 10) */}
+                      {/* PR TIMELINE ENTRY CARD */}
                       <div className="rounded-xl border border-slate-800/90 bg-[#080c14] hover:bg-[#0c101a] hover:border-slate-700/90 shadow-md p-5 space-y-4">
 
-                        {/* REPOSITORY PATH & PR TITLE */}
+                        {/* REPOSITORY PATH, PR TITLE & BADGES */}
                         <div className="space-y-1.5 font-mono">
                           <div className="flex flex-wrap items-center justify-between gap-2 text-xs border-b border-slate-800/60 pb-2.5">
                             <div className="flex items-center gap-2">
                               <GithubIcon className="w-3.5 h-3.5 text-slate-400" />
                               <span className="font-bold text-slate-200">{item.repoFullName}</span>
                               <span className="text-slate-600">·</span>
-                              <span className="text-emerald-400 font-bold">PR #{item.prNumber || 'merged'}</span>
+                              <span className="text-emerald-400 font-bold">PR #{item.prNumber || 'open'}</span>
                             </div>
 
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 text-[11px] font-bold">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                              <span>MERGED</span>
-                            </span>
+                            {/* STATE & ELIGIBILITY BADGES */}
+                            <div className="flex items-center gap-2">
+                              {isVerified ? (
+                                <>
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 text-[11px] font-bold">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                    <span>MERGED</span>
+                                  </span>
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 text-[11px] font-bold">
+                                    <Shield className="w-3 h-3 text-emerald-400" />
+                                    <span>RR ELIGIBLE / VERIFIED</span>
+                                  </span>
+                                </>
+                              ) : isMerged && !hasLinkedIssue ? (
+                                <>
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 text-[11px] font-bold">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                    <span>MERGED</span>
+                                  </span>
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800/60 text-[11px] font-bold" title="No linked GitHub issue">
+                                    <AlertCircle className="w-3 h-3 text-amber-400" />
+                                    <span>RR INELIGIBLE</span>
+                                  </span>
+                                </>
+                              ) : isMerged && hasLinkedIssue ? (
+                                <>
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 text-[11px] font-bold">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                    <span>MERGED</span>
+                                  </span>
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800/60 text-[11px] font-bold">
+                                    <AlertCircle className="w-3 h-3 text-amber-400" />
+                                    <span>RR INELIGIBLE</span>
+                                  </span>
+                                </>
+                              ) : isOpen ? (
+                                <>
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800 text-[11px] font-bold">
+                                    <Clock className="w-3 h-3 text-blue-400" />
+                                    <span>OPEN</span>
+                                  </span>
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800 text-[11px] font-bold">
+                                    <span>NOT YET ELIGIBLE</span>
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800 text-[11px] font-bold">
+                                    <X className="w-3 h-3 text-slate-500" />
+                                    <span>CLOSED</span>
+                                  </span>
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800 text-[11px] font-bold">
+                                    <span>NOT ELIGIBLE</span>
+                                  </span>
+                                </>
+                              )}
+                            </div>
                           </div>
 
                           <h3 className="text-base font-bold text-white tracking-tight font-sans">
@@ -1213,7 +1335,7 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                           </h3>
                         </div>
 
-                        {/* WHAT DID I CHANGE? (ENGINEERING CHANGE SUMMARY) */}
+                        {/* ENGINEERING CHANGE SUMMARY */}
                         <div className="p-3.5 rounded-lg border border-slate-800/90 bg-[#050810] space-y-1 font-mono">
                           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                             <Terminal className="w-3 h-3 text-emerald-400" />
@@ -1224,10 +1346,9 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                           </p>
                         </div>
 
-                        {/* CONCISE FOOTPRINT, VERIFICATION & AWARD STRIP (Requirement 10) */}
+                        {/* FOOTPRINT & RR AUDIT REWARD STRIP */}
                         <div className="flex flex-wrap items-center justify-between gap-3 pt-1 font-mono text-xs border-t border-slate-800/40">
                           <div className="flex flex-wrap items-center gap-4 text-slate-300 text-[11px]">
-                            {/* HOW MUCH DID I CHANGE? */}
                             <div className="flex items-center gap-1.5">
                               <FileCode className="w-3.5 h-3.5 text-slate-400" />
                               <span>
@@ -1238,7 +1359,6 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                               <span className="text-rose-400 font-bold">-{item.linesDeleted}</span>
                             </div>
 
-                            {/* WAS IT VERIFIED? */}
                             <div className="flex items-center gap-1">
                               <CheckCircle2 className={`w-3.5 h-3.5 ${checksPill.passed ? 'text-emerald-400' : 'text-amber-400'}`} />
                               <span className={checksPill.passed ? 'text-emerald-300 font-semibold' : 'text-amber-300 font-semibold'}>
@@ -1246,11 +1366,26 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                               </span>
                             </div>
 
-                            {/* WHAT DID REPO RESCUE AWARD? */}
-                            <div className="flex items-center gap-1 text-amber-300 font-bold">
-                              <Shield className="w-3.5 h-3.5 text-amber-400" />
-                              <span>+{item.rrPoints} RR POINTS</span>
-                            </div>
+                            {isVerified ? (
+                              <div className="flex items-center gap-1 text-amber-300 font-bold">
+                                <Shield className="w-3.5 h-3.5 text-amber-400" />
+                                <span>+{item.rrPoints} RR POINTS</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1 text-slate-400 font-semibold text-[11px]">
+                                <Shield className="w-3.5 h-3.5 text-slate-500" />
+                                <span>0 RR POINTS</span>
+                                {isMerged && !hasLinkedIssue && (
+                                  <span className="text-amber-400/90 text-[10px] ml-1">· No linked GitHub issue</span>
+                                )}
+                                {isOpen && (
+                                  <span className="text-blue-400/90 text-[10px] ml-1">· PR is not yet merged</span>
+                                )}
+                                {isClosed && (
+                                  <span className="text-slate-500 text-[10px] ml-1">· PR closed without merging</span>
+                                )}
+                              </div>
+                            )}
                           </div>
 
                           {/* [OPEN ENGINEERING REVIEW →] */}
