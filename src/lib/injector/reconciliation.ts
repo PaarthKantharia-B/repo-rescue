@@ -14,8 +14,8 @@ import {
   normalizeGithubIssue,
   RawGithubIssue,
 } from './ingestion';
-import { evaluate8FactorsWithEvidence } from '../issues/ingestion';
-import { calculateRRDifficulty, SCORING_VERSION } from '../scoring';
+import { evaluateV2FactorsWithEvidence } from '../issues/ingestion';
+import { calculateRRDifficultyV2, SCORING_VERSION_V2_3_1 } from '../scoring';
 import { recalculateIssuePRStats } from '../issues/sync';
 import { extractLinkedIssueNumbers, verifyAndAwardContribution } from '../contributions/verify';
 import { GithubApiClient } from './client';
@@ -258,15 +258,16 @@ export async function reconcileRepositoryIssues(
 
     if (!existingIssue) {
       // NEW Issue missed by webhooks
-      const evaluation = evaluate8FactorsWithEvidence({
+      const evaluation = evaluateV2FactorsWithEvidence({
         title: incomingTitle,
         body: incomingBody,
         labels: rawLabels,
-        repoFullName: repo.fullName,
-        repository: repo,
+        repoName: repo.name,
+        repoStars: repo.starsCount,
+        repoType: repo.repoType,
       });
 
-      const rrDifficulty = calculateRRDifficulty(evaluation.factors);
+      const rrDifficulty = evaluation.compositeScore;
       regradedCount++;
       insertedCount++;
 
@@ -276,19 +277,18 @@ export async function reconcileRepositoryIssues(
       mockDbStore.issueScores.push({
         id: scoreId,
         issueId,
-        scoringVersion: SCORING_VERSION,
+        scoringVersion: SCORING_VERSION_V2_3_1,
         calculatedAt: now,
-        technicalDifficulty: evaluation.factors.technicalDifficulty,
-        codebaseComplexity: evaluation.factors.codebaseComplexity,
-        issueScope: evaluation.factors.issueScope,
-        domainKnowledge: evaluation.factors.domainKnowledge,
-        expectedImpact: evaluation.factors.expectedImpact,
-        testingComplexity: evaluation.factors.testingComplexity,
-        issueClarity: evaluation.factors.issueClarity,
-        maintainerActivity: evaluation.factors.maintainerActivity,
+        technicalDifficulty: evaluation.factors.technicalComplexity,
+        codebaseComplexity: evaluation.factors.changeScope,
+        issueScope: evaluation.factors.domainSpecialization,
+        domainKnowledge: evaluation.factors.testingVerificationEffort,
+        expectedImpact: evaluation.factors.problemAmbiguity,
+        testingComplexity: evaluation.factors.testingVerificationEffort,
+        issueClarity: evaluation.factors.problemAmbiguity,
+        maintainerActivity: 5.0,
         compositeScore: rrDifficulty,
         reasoning: evaluation.overallReasoning,
-        factorDetails: evaluation.factorDetails,
       });
 
       const newIssueRecord: Issue & { repositoryId: string } = {
@@ -307,7 +307,7 @@ export async function reconcileRepositoryIssues(
         authorUsername,
         rrDifficulty,
         createdAt: rawGhIssue.created_at || now,
-        scoreBreakdown: evaluation.factors,
+        scoreBreakdown: evaluation.factors as any,
         prActivityClassification: 'OPEN_NO_PR',
         openPrCount: 0,
         mergedPrCount: 0,
@@ -358,15 +358,16 @@ export async function reconcileRepositoryIssues(
       let scoreBreakdown = existingIssue.scoreBreakdown;
 
       if (titleChanged || bodyChanged || labelsChanged) {
-        const evaluation = evaluate8FactorsWithEvidence({
+        const evaluation = evaluateV2FactorsWithEvidence({
           title: incomingTitle,
           body: incomingBody,
           labels: rawLabels,
-          repoFullName: repo.fullName,
-          repository: repo,
+          repoName: repo.name,
+          repoStars: repo.starsCount,
+          repoType: repo.repoType,
         });
 
-        rrDifficulty = calculateRRDifficulty(evaluation.factors);
+        rrDifficulty = evaluation.compositeScore;
         scoreBreakdown = evaluation.factors;
         regradedCount++;
 
@@ -378,19 +379,18 @@ export async function reconcileRepositoryIssues(
         const scoreRecord = {
           id: scoreId,
           issueId: existingIssue.id,
-          scoringVersion: SCORING_VERSION,
+          scoringVersion: SCORING_VERSION_V2_3_1,
           calculatedAt: now,
-          technicalDifficulty: evaluation.factors.technicalDifficulty,
-          codebaseComplexity: evaluation.factors.codebaseComplexity,
-          issueScope: evaluation.factors.issueScope,
-          domainKnowledge: evaluation.factors.domainKnowledge,
-          expectedImpact: evaluation.factors.expectedImpact,
-          testingComplexity: evaluation.factors.testingComplexity,
-          issueClarity: evaluation.factors.issueClarity,
-          maintainerActivity: evaluation.factors.maintainerActivity,
+          technicalDifficulty: evaluation.factors.technicalComplexity,
+          codebaseComplexity: evaluation.factors.changeScope,
+          issueScope: evaluation.factors.domainSpecialization,
+          domainKnowledge: evaluation.factors.testingVerificationEffort,
+          expectedImpact: evaluation.factors.problemAmbiguity,
+          testingComplexity: evaluation.factors.testingVerificationEffort,
+          issueClarity: evaluation.factors.problemAmbiguity,
+          maintainerActivity: 5.0,
           compositeScore: rrDifficulty,
           reasoning: evaluation.overallReasoning,
-          factorDetails: evaluation.factorDetails,
         };
 
         if (existingScoreIdx >= 0) {

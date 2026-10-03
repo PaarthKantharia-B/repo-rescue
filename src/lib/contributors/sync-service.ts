@@ -2,7 +2,7 @@ import { prisma, withPrismaRetry } from '@/lib/prisma';
 import { ContributorSyncStatus } from '@prisma/client';
 import { extractLinkedIssueNumbers, verifyAndAwardContribution, GitHubPRPayload } from '@/lib/contributions/verify';
 import { evaluateV2FactorsWithEvidence } from '@/lib/issues/ingestion';
-import { SCORING_VERSION_V2_3 } from '@/lib/scoring';
+import { SCORING_VERSION_V2_3_1 } from '@/lib/scoring';
 import { getOrCreateCaseStudyAnalysis } from '@/lib/ai/case-study-service';
 
 export interface ContributorSyncResult {
@@ -381,7 +381,7 @@ export async function syncContributorGithubActivity(
                 prisma.issueScore.create({
                   data: {
                     issueId: matchedIssue!.id,
-                    scoringVersion: SCORING_VERSION_V2_3,
+                    scoringVersion: SCORING_VERSION_V2_3_1,
                     calculatedAt: issueNow,
                     technicalDifficulty: evaluation.factors.technicalComplexity,
                     codebaseComplexity: evaluation.factors.changeScope,

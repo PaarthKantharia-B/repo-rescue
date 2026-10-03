@@ -3,7 +3,7 @@ import { PRStatus } from '@prisma/client';
 import { Issue, Repository } from '@/types';
 import { getTargetOrganizationLogins } from '../organizations/config';
 import { evaluateV2FactorsWithEvidence } from '../issues/ingestion';
-import { calculateRRDifficultyV2, SCORING_VERSION_V2_3 } from '../scoring';
+import { calculateRRDifficultyV2, SCORING_VERSION_V2_3_1 } from '../scoring';
 import { extractLinkedIssueNumbers, verifyAndAwardContribution, VerificationResult, GitHubPRPayload } from '../contributions/verify';
 
 const PROCESSED_DELIVERY_IDS = new Set<string>();
@@ -323,7 +323,7 @@ export async function processLiveIssueEvent(
       titleChanged ||
       bodyChanged ||
       labelsChanged ||
-      existingIssue.scores?.scoringVersion !== SCORING_VERSION_V2_3
+      existingIssue.scores?.scoringVersion !== SCORING_VERSION_V2_3_1
     );
 
     let rrDifficulty = existingIssue ? existingIssue.rrDifficulty : 0.0;
@@ -397,7 +397,7 @@ export async function processLiveIssueEvent(
           where: { issueId: upsertedIssue.id },
           create: {
             issueId: upsertedIssue.id,
-            scoringVersion: SCORING_VERSION_V2_3,
+            scoringVersion: SCORING_VERSION_V2_3_1,
             calculatedAt: now,
             technicalDifficulty: evaluationResult!.factors.technicalComplexity,
             codebaseComplexity: evaluationResult!.factors.changeScope,
@@ -411,7 +411,7 @@ export async function processLiveIssueEvent(
             reasoning: evaluationResult!.overallReasoning,
           },
           update: {
-            scoringVersion: SCORING_VERSION_V2_3,
+            scoringVersion: SCORING_VERSION_V2_3_1,
             calculatedAt: now,
             technicalDifficulty: evaluationResult!.factors.technicalComplexity,
             codebaseComplexity: evaluationResult!.factors.changeScope,
