@@ -28,11 +28,12 @@ import {
   Lock,
   Database,
   Terminal,
+  Calculator,
 } from 'lucide-react';
 
 export const metadata = {
   title: 'Guidance & Scoring System • Repo Rescue',
-  description: 'Understand how Repo Rescue evaluates issues using the V2.3.0 Evidence Accumulation Engine, awards RR Points, and builds verified contributor reputation.',
+  description: 'Understand how Repo Rescue evaluates issues using the V2.3.1 Evidence Accumulation Engine, awards RR Points, and builds verified contributor reputation.',
 };
 
 export default function GuidancePage() {
@@ -41,46 +42,61 @@ export default function GuidancePage() {
       id: 1,
       name: 'TECHNICAL COMPLEXITY',
       code: 'TC',
+      weight: '35%',
+      weightVal: '0.35',
       desc: 'Algorithmic depth, system execution complexity, memory structures, and architectural logic suggested by the issue text.',
       icon: Cpu,
       color: 'text-blue-400',
       bgColor: 'bg-blue-950/40 border-blue-800/40',
+      badgeColor: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
     },
     {
       id: 2,
       name: 'SCOPE OF CHANGE',
       code: 'CS',
+      weight: '25%',
+      weightVal: '0.25',
       desc: 'The expected breadth of the change, inferred from the issue evidence — such as localized changes, multiple files/modules, packages, or architectural boundaries.',
       icon: Layers,
       color: 'text-purple-400',
       bgColor: 'bg-purple-950/40 border-purple-800/40',
+      badgeColor: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
     },
     {
       id: 3,
       name: 'DOMAIN SPECIALIZATION',
       code: 'DS',
+      weight: '15%',
+      weightVal: '0.15',
       desc: 'Specialized technical background inferred from issue evidence (e.g. compilers, distributed consensus, MVCC, async streams, RLS policies).',
       icon: Brain,
       color: 'text-cyan-400',
       bgColor: 'bg-cyan-950/40 border-cyan-800/40',
+      badgeColor: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30',
     },
     {
       id: 4,
       name: 'TESTING & VERIFICATION EFFORT',
       code: 'TE',
+      weight: '15%',
+      weightVal: '0.15',
       desc: 'Inferred testing and validation requirement suggested by the issue description, labels, and system area.',
       icon: CheckSquare,
       color: 'text-amber-400',
       bgColor: 'bg-amber-950/40 border-amber-800/40',
+      badgeColor: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
     },
     {
       id: 5,
       name: 'PROBLEM AMBIGUITY',
       code: 'PA',
+      weight: '10%',
+      weightVal: '0.10',
       desc: 'How much additional triage and investigation the issue appears to require based on the available description and evidence.',
       icon: Target,
       color: 'text-emerald-400',
       bgColor: 'bg-emerald-950/40 border-emerald-800/40',
+      badgeColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
     },
   ];
 
@@ -90,21 +106,21 @@ export default function GuidancePage() {
       tier: 'Trivial',
       color: 'text-slate-300 border-slate-700 bg-slate-900/60',
       desc: 'Trivial documentation fixes, typos, README corrections, broken links, i18n translation strings, code formatting.',
-      example: 'Fix typo in user error message (0.4)',
+      example: 'Fix typo in user error message (0.5)',
     },
     {
       range: '1.0 – 2.0',
       tier: 'Very Easy',
       color: 'text-emerald-400 border-emerald-900/60 bg-emerald-950/20',
-      desc: 'Very small localized changes, dependency version bumps, straightforward config adjustments, minor style tweaks.',
-      example: 'Bump lodash patch version or update config comment (1.2)',
+      desc: 'Very small localized changes, function call syntax fixes, localized syntax corrections, minor style tweaks.',
+      example: 'Fix syntax error in print function call (1.9)',
     },
     {
       range: '2.0 – 3.0',
       tier: 'Easy',
       color: 'text-emerald-300 border-emerald-800/60 bg-emerald-950/30',
       desc: 'Simple localized bugs, small UI component padding fixes, null-check validations, simple date/string helper updates.',
-      example: 'Fix button hover alignment or null check on avatar URI (2.5)',
+      example: 'Add null check on avatar URI (2.5)',
     },
     {
       range: '3.0 – 4.0',
@@ -167,7 +183,7 @@ export default function GuidancePage() {
         <div className="relative z-10 max-w-4xl mx-auto space-y-4">
           <div className="inline-flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 rounded-full bg-purple-950/60 border border-purple-800/50 text-purple-300 text-[10px] sm:text-xs font-mono max-w-full flex-wrap">
             <BookOpen className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-            <span className="text-center">V2.3.0 Evidence Accumulation Engine • Platform Guidance</span>
+            <span className="text-center">V2.3.1 Evidence Accumulation Engine • Platform Guidance</span>
           </div>
 
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black font-mono text-slate-100 tracking-tight">
@@ -175,7 +191,7 @@ export default function GuidancePage() {
           </h1>
 
           <p className="text-base sm:text-lg text-slate-300 font-sans leading-relaxed max-w-2xl mx-auto">
-            Understand how Repo Rescue evaluates open-source issues, awards RR Points, and measures contributor engineering effort.
+            Understand how Repo Rescue evaluates open-source issues using the V2.3.1 Evidence Accumulation Engine, awards RR Points, and measures contributor engineering effort.
           </p>
         </div>
 
@@ -188,7 +204,7 @@ export default function GuidancePage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {[
               { step: '01', name: 'DISCOVER', desc: 'Find open issue', icon: Search, color: 'text-blue-400' },
-              { step: '02', name: 'EVALUATE', desc: 'V2.3 Evidence Engine', icon: Shield, color: 'text-purple-400' },
+              { step: '02', name: 'EVALUATE', desc: 'V2.3.1 Engine', icon: Shield, color: 'text-purple-400' },
               { step: '03', name: 'SOLVE', desc: 'Implement fix', icon: Cpu, color: 'text-cyan-400' },
               { step: '04', name: 'MERGE', desc: 'Maintainer PR merge', icon: GitPullRequest, color: 'text-emerald-400' },
               { step: '05', name: 'VERIFY', desc: 'Idempotent audit', icon: CheckCircle2, color: 'text-amber-400' },
@@ -210,78 +226,44 @@ export default function GuidancePage() {
         </div>
       </section>
 
-      {/* 2. SECTION 01 — HOW IS AN ISSUE GRADED? (V2.3 EVIDENCE ENGINE) */}
+      {/* 2. SECTION 01 — HOW IS AN ISSUE GRADED? (V2.3.1 EVIDENCE ENGINE) */}
       <section className="space-y-8">
         <div className="space-y-3">
           <div className="inline-flex items-center gap-2 text-xs font-mono font-bold uppercase tracking-widest text-blue-400">
             <span>Section 01</span>
             <span>•</span>
-            <span>V2.3.0 Evidence Accumulation Engine</span>
+            <span>V2.3.1 Evidence Accumulation Engine</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-mono font-bold text-slate-100">
             HOW IS AN ISSUE GRADED?
           </h2>
           <p className="text-sm sm:text-base text-slate-300 font-sans leading-relaxed max-w-3xl">
-            Every scored issue receives an <strong className="text-slate-100 font-mono">RR Difficulty score</strong> on a deterministic <strong className="text-blue-400 font-mono">0.0 to 10.0 scale</strong>. Under Repo Rescue V2.3.0, difficulty estimates <strong className="text-slate-100">contributor engineering effort suggested by issue evidence</strong> rather than single keywords, repository popularity, or maintainer reputation.
+            Every scored issue receives an <strong className="text-slate-100 font-mono">RR Difficulty score</strong> on a deterministic <strong className="text-blue-400 font-mono">0.0 to 10.0 scale</strong>. Under Repo Rescue V2.3.1, difficulty estimates <strong className="text-slate-100">contributor engineering effort suggested by evidence available in the issue itself</strong> rather than isolated keywords, repository popularity, or maintainer reputation.
           </p>
         </div>
 
-        {/* EVIDENCE ACCUMULATION EXPLANATION CARD */}
-        <div className="p-4 sm:p-6 rounded-2xl border border-slate-800 bg-slate-950/90 backdrop-blur-md space-y-4">
-          <div className="flex items-center gap-2 text-sm font-mono font-bold text-purple-400 uppercase tracking-wider">
-            <Sliders className="w-5 h-5 text-purple-400" />
-            <span>Multi-Signal Evidence Accumulation</span>
+        {/* AUTHORITATIVE FORMULA BOX */}
+        <div className="p-6 rounded-2xl border border-blue-900/60 bg-blue-950/20 backdrop-blur-xl space-y-4 shadow-xl">
+          <div className="flex items-center gap-2 text-xs font-mono font-bold text-blue-400 uppercase tracking-widest">
+            <Calculator className="w-4 h-4 text-blue-400" />
+            <span>Authoritative V2.3.1 Scoring Formula</span>
           </div>
-          <p className="text-xs sm:text-sm font-sans text-slate-300 leading-relaxed">
-            Unlike simple keyword matching systems, the V2.3.0 engine accumulates signals across multiple implementation dimensions inferred from the issue text, body structure, code blocks, stack traces, and labels:
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 font-mono text-xs text-slate-300">
-            <div className="p-3 rounded-lg border border-slate-800 bg-slate-900/50 flex items-center gap-2">
-              <Code2 className="w-4 h-4 text-blue-400 shrink-0" />
-              <span>Technical Complexity & Logic Depth</span>
+
+          <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/90 font-mono text-slate-100 text-sm sm:text-base leading-relaxed overflow-x-auto">
+            <div className="text-purple-300 font-bold mb-1">
+              RR Difficulty = (TC × 0.35) + (CS × 0.25) + (DS × 0.15) + (TE × 0.15) + (PA × 0.10)
             </div>
-            <div className="p-3 rounded-lg border border-slate-800 bg-slate-900/50 flex items-center gap-2">
-              <Layers className="w-4 h-4 text-purple-400 shrink-0" />
-              <span>Inferred Scope of Change</span>
-            </div>
-            <div className="p-3 rounded-lg border border-slate-800 bg-slate-900/50 flex items-center gap-2">
-              <Brain className="w-4 h-4 text-cyan-400 shrink-0" />
-              <span>Domain Specialization Signals</span>
-            </div>
-            <div className="p-3 rounded-lg border border-slate-800 bg-slate-900/50 flex items-center gap-2">
-              <CheckSquare className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>Testing & Verification Requirements</span>
-            </div>
-            <div className="p-3 rounded-lg border border-slate-800 bg-slate-900/50 flex items-center gap-2">
-              <Target className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>Problem Ambiguity & Triage Effort</span>
-            </div>
-            <div className="p-3 rounded-lg border border-slate-800 bg-slate-900/50 flex items-center gap-2">
-              <Shield className="w-4 h-4 text-rose-400 shrink-0" />
-              <span>Security, Concurrency & Storage Signals</span>
+            <div className="text-amber-400 font-bold text-xs mt-2">
+              RR Points = RR Difficulty × 10
             </div>
           </div>
-          <p className="text-xs font-sans text-slate-400 italic">
-            Note: A single keyword never forces an extreme score. Scores are derived by weighing all available evidence together.
-          </p>
         </div>
 
-        {/* PROMINENT EVIDENCE LIMITATION NOTE */}
-        <div className="p-5 rounded-xl border border-purple-900/50 bg-purple-950/20 text-purple-200 space-y-1.5 text-xs font-sans">
-          <div className="flex items-center gap-2 font-mono font-bold text-purple-400 uppercase tracking-wider">
-            <Info className="w-4 h-4 shrink-0 text-purple-400" />
-            <span>Evidence-Based Pre-Implementation Estimation</span>
-          </div>
-          <p className="leading-relaxed text-slate-300">
-            The 5 core factors are inferred strictly from evidence available within the GitHub issue — primarily title, body description, code snippets, and labels. RR Difficulty estimates the implementation effort suggested by the evidence available in an issue. It does not inspect the eventual PR diff, source files, AST, or actual implementation effort.
-          </p>
-        </div>
-
-        {/* 5 CORE EFFORT FACTORS GRID */}
+        {/* 5 CORE EFFORT FACTORS GRID WITH VISIBLE WEIGHTS */}
         <div className="space-y-4">
           <h3 className="text-lg font-mono font-bold text-slate-200 flex items-center gap-2">
             <Layers className="w-4 h-4 text-purple-400" />
-            <span>The 5 Core RR Difficulty Factors</span>
+            <span>The 5 Weighted Factors (V2.3.1 Standard)</span>
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -290,12 +272,14 @@ export default function GuidancePage() {
               return (
                 <div
                   key={factor.id}
-                  className={`p-5 rounded-xl border ${factor.bgColor} space-y-2 flex flex-col justify-between`}
+                  className={`p-5 rounded-xl border ${factor.bgColor} space-y-3 flex flex-col justify-between`}
                 >
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <IconComponent className={`w-5 h-5 ${factor.color}`} />
-                      <span className="text-[10px] font-mono text-slate-400 font-bold">{factor.code}</span>
+                      <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-md border ${factor.badgeColor}`}>
+                        {factor.code} ({factor.weight})
+                      </span>
                     </div>
                     <div className="font-mono font-bold text-xs text-slate-100">{factor.name}</div>
                     <p className="text-xs font-sans text-slate-300 leading-relaxed">{factor.desc}</p>
@@ -303,6 +287,42 @@ export default function GuidancePage() {
                 </div>
               );
             })}
+          </div>
+        </div>
+
+        {/* ILLUSTRATIVE CALCULATION EXAMPLE */}
+        <div className="p-6 rounded-2xl border border-slate-800 bg-slate-950/90 backdrop-blur-md space-y-4">
+          <div className="flex items-center gap-2 text-sm font-mono font-bold text-cyan-400 uppercase tracking-wider">
+            <Code2 className="w-5 h-5 text-cyan-400" />
+            <span>Illustrative Scoring Calculation Example</span>
+          </div>
+
+          <p className="text-xs sm:text-sm font-sans text-slate-300 leading-relaxed">
+            Consider a localized syntax fix issue (e.g. Issue #1 &quot;unexxpected syntax error&quot;):
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-mono text-xs">
+            <div className="p-4 rounded-xl border border-slate-800 bg-slate-900/60 space-y-1 text-slate-300">
+              <div className="text-slate-400 font-bold mb-2">Evaluated Factors:</div>
+              <div>TC (Technical Complexity) = <span className="text-blue-400 font-bold">2.0</span> × 0.35 = 0.70</div>
+              <div>CS (Scope of Change) = <span className="text-purple-400 font-bold">2.0</span> × 0.25 = 0.50</div>
+              <div>DS (Domain Specialization) = <span className="text-cyan-400 font-bold">1.0</span> × 0.15 = 0.15</div>
+              <div>TE (Testing Effort) = <span className="text-amber-400 font-bold">2.0</span> × 0.15 = 0.30</div>
+              <div>PA (Problem Ambiguity) = <span className="text-emerald-400 font-bold">2.0</span> × 0.10 = 0.20</div>
+            </div>
+
+            <div className="p-4 rounded-xl border border-slate-800 bg-slate-900/60 space-y-2 flex flex-col justify-center">
+              <div className="text-slate-400 font-bold">Calculated Output:</div>
+              <div className="text-slate-200">
+                Sum = 0.70 + 0.50 + 0.15 + 0.30 + 0.20 = <span className="text-purple-300 font-bold">1.85</span>
+              </div>
+              <div className="text-slate-100 font-bold text-sm">
+                RR Difficulty = <span className="text-blue-400">1.9</span> (rounded to 1 decimal)
+              </div>
+              <div className="text-amber-400 font-bold text-sm">
+                Potential RR Points = 1.9 × 10 = <span className="text-amber-300">19 RR Points</span>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -319,7 +339,7 @@ export default function GuidancePage() {
             THE 0.0 – 10.0 DIFFICULTY RANGE GUIDE
           </h2>
           <p className="text-sm sm:text-base text-slate-300 font-sans leading-relaxed max-w-3xl">
-            The table below serves as general <strong className="text-slate-100">guidance</strong> to help you understand how engineering tasks map across the difficulty spectrum. These bands describe typical issue types, not guaranteed score ranges. The final score is determined by accumulated evidence.
+            The table below serves as general <strong className="text-slate-100">guidance</strong> to help you understand how engineering tasks map across the difficulty spectrum under V2.3.1. These bands describe typical issue types, not guaranteed score ranges. The final score is determined strictly by accumulated issue evidence.
           </p>
         </div>
 
@@ -339,19 +359,19 @@ export default function GuidancePage() {
         </div>
       </section>
 
-      {/* 4. SECTION 03 — CONTEXT PRECEDENCE & ANTI-GAMING */}
+      {/* 4. SECTION 03 — CONTEXT PRECEDENCE & ANTI-GAMING PRINCIPLES */}
       <section className="space-y-8 pt-6 border-t border-slate-900">
         <div className="space-y-3">
           <div className="inline-flex items-center gap-2 text-xs font-mono font-bold uppercase tracking-widest text-amber-400">
             <span>Section 03</span>
             <span>•</span>
-            <span>Context Precedence & Anti-Gaming</span>
+            <span>Core Scoring Principles & Anti-Gaming</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-mono font-bold text-slate-100">
-            CONTEXTUAL PRECEDENCE & ANTI-GAMING
+            IMPORTANT SCORING PRINCIPLES
           </h2>
           <p className="text-sm sm:text-base text-slate-300 font-sans leading-relaxed max-w-3xl">
-            Repo Rescue evaluates the intent and execution context of an issue as a whole, preventing keyword collisions and artificial inflation.
+            Repo Rescue evaluates the intent and execution context of an issue as a whole, preventing keyword collisions, PR diff dependency, and artificial inflation.
           </p>
         </div>
 
@@ -363,7 +383,7 @@ export default function GuidancePage() {
               <span>1. Contextual Evidence Precedence</span>
             </div>
             <p className="text-xs font-sans text-slate-300 leading-relaxed">
-              Words must be interpreted within their technical context. The engine prioritizes explicit action markers over isolated domain words:
+              Words are interpreted within their technical context. The engine prioritizes explicit action markers over isolated domain words:
             </p>
             <div className="space-y-3 font-mono text-xs">
               <div className="p-3 rounded-lg border border-slate-800 bg-slate-900/70 space-y-1">
@@ -376,7 +396,7 @@ export default function GuidancePage() {
               <div className="p-3 rounded-lg border border-slate-800 bg-slate-900/70 space-y-1">
                 <div className="text-blue-300 font-bold break-words">&quot;Fix typo in DB schema setup guide&quot;</div>
                 <div className="text-slate-400 text-[11px] font-sans">
-                  Graded as a <strong className="text-slate-200">documentation task (~0.4)</strong> despite technical terms &quot;DB&quot; and &quot;schema&quot;, because the action is correcting documentation text.
+                  Graded as a <strong className="text-slate-200">documentation task (~0.5)</strong> despite technical terms &quot;DB&quot; and &quot;schema&quot;, because the action is correcting documentation text.
                 </div>
               </div>
             </div>
@@ -386,7 +406,7 @@ export default function GuidancePage() {
           <div className="p-4 sm:p-6 rounded-2xl border border-amber-900/50 bg-amber-950/20 backdrop-blur-md space-y-4 min-w-0">
             <div className="flex items-center gap-2 font-mono font-bold text-sm text-amber-400 uppercase tracking-wider">
               <Shield className="w-5 h-5 text-amber-400 shrink-0" />
-              <span>2. Anti-Gaming Vocabulary Protection</span>
+              <span>2. Anti-Gaming Vocabulary Safeguard</span>
             </div>
             <p className="text-xs font-sans text-slate-300 leading-relaxed">
               Stuffing an issue body with advanced technical terms does not artificially increase its difficulty score:
@@ -394,7 +414,7 @@ export default function GuidancePage() {
             <div className="p-4 rounded-xl border border-slate-800 bg-slate-900/70 space-y-2 text-xs">
               <div className="font-mono text-amber-300 font-bold">Keyword Stuffing Safeguard</div>
               <p className="font-sans text-slate-300 text-[11px] leading-relaxed">
-                If an issue title specifies a typo/README fix, inserting body text containing <code className="text-amber-400">compiler</code>, <code className="text-amber-400">AST</code>, <code className="text-amber-400">deadlock</code>, <code className="text-amber-400">concurrency</code>, or <code className="text-amber-400">distributed consensus</code> without code blocks or stack traces will remain locked to doc-tier difficulty (<strong className="text-emerald-400 font-mono">0.4 – 0.7</strong>).
+                If an issue title specifies a typo/README fix, inserting body text containing <code className="text-amber-400">compiler</code>, <code className="text-amber-400">AST</code>, <code className="text-amber-400">deadlock</code>, <code className="text-amber-400">concurrency</code>, or <code className="text-amber-400">distributed consensus</code> without code blocks or stack traces remains locked to doc-tier difficulty (<strong className="text-emerald-400 font-mono">0.4 – 0.7</strong>).
               </p>
             </div>
           </div>
@@ -411,16 +431,16 @@ export default function GuidancePage() {
         </div>
 
         <p className="text-xs sm:text-sm font-sans text-slate-300 leading-relaxed">
-          RR Difficulty measures <strong className="text-slate-100 font-mono">implementation effort suggested by issue evidence</strong>, not repository popularity or prestige. The following factors explicitly do NOT increase difficulty:
+          RR Difficulty measures <strong className="text-slate-100 font-mono">implementation effort suggested by issue evidence BEFORE implementation</strong>. The following factors explicitly do NOT determine or inflate difficulty:
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 font-mono text-xs">
           {[
-            { title: 'Repository Stars', desc: 'A typo fix in a 75k star repository scores 0.4, identical to a 100 star repository.' },
+            { title: 'Repository Stars', desc: 'A typo fix in a 75k star repository scores 0.5, identical to a 100 star repository.' },
             { title: 'Repository Popularity', desc: 'High traffic or popular status does not inflate engineering difficulty.' },
-            { title: 'Maintainer Activity', desc: 'Maintainer responsiveness does not alter code complexity.' },
+            { title: 'Eventual PR Diff', desc: 'The PR diff, source files, or AST changes do NOT determine issue difficulty.' },
             { title: 'Famous Framework', desc: 'Framework prestige does not turn a 2-line UI tweak into a hard task.' },
-            { title: 'Perceived Impact', desc: 'High urgency or issue severity does not change implementation effort.' },
+            { title: 'Isolated Keywords', desc: 'Technical words (e.g. database, schema, security) do not inflate score without evidence.' },
           ].map((item, idx) => (
             <div key={idx} className="p-4 rounded-xl border border-slate-800 bg-slate-900/50 space-y-1.5 min-w-0">
               <span className="font-bold text-slate-200 block text-xs">{item.title}</span>
@@ -430,27 +450,50 @@ export default function GuidancePage() {
         </div>
       </section>
 
-      {/* 6. SECTION 05 — HOW DO I EARN RR POINTS? */}
+      {/* 6. SECTION 05 — HOW DO I EARN RR POINTS? (IMPORTANT PRODUCT DISTINCTION) */}
       <section className="space-y-8 pt-6 border-t border-slate-900">
         <div className="space-y-3">
           <div className="inline-flex items-center gap-2 text-xs font-mono font-bold uppercase tracking-widest text-emerald-400">
             <span>Section 05</span>
             <span>•</span>
-            <span>Points Ledger Formula</span>
+            <span>Points Ledger & Product Distinction</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-mono font-bold text-slate-100">
             HOW DO I EARN RR POINTS?
           </h2>
           <p className="text-sm sm:text-base text-slate-300 font-sans leading-relaxed max-w-3xl">
-            Points are calculated strictly and deterministically from the evaluated RR Difficulty score upon maintainer merge verification.
+            Repo Rescue enforces a strict distinction between <strong className="text-blue-400 font-mono">RR Difficulty</strong> (issue complexity evaluation) and <strong className="text-amber-400 font-mono">RR Points</strong> (awarded reputation).
           </p>
+        </div>
+
+        {/* IMPORTANT PRODUCT DISTINCTION BOX */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="p-5 rounded-xl border border-blue-900/60 bg-blue-950/20 space-y-2">
+            <div className="text-blue-400 font-mono font-bold text-xs uppercase tracking-wider flex items-center gap-2">
+              <Target className="w-4 h-4" />
+              <span>RR Difficulty</span>
+            </div>
+            <p className="text-xs font-sans text-slate-300 leading-relaxed">
+              The difficulty score (0.0 – 10.0) estimated deterministically from evidence contained in the GitHub issue itself before implementation.
+            </p>
+          </div>
+
+          <div className="p-5 rounded-xl border border-amber-900/60 bg-amber-950/20 space-y-2">
+            <div className="text-amber-400 font-mono font-bold text-xs uppercase tracking-wider flex items-center gap-2">
+              <Award className="w-4 h-4" />
+              <span>RR Points (Awarded Reputation)</span>
+            </div>
+            <p className="text-xs font-sans text-slate-300 leading-relaxed">
+              <strong className="text-amber-300 font-mono">RR Difficulty × 10</strong>, posted to the immutable Points Ledger <strong className="text-slate-100">ONLY when a maintainer merges your PR</strong> and audit verification succeeds.
+            </p>
+          </div>
         </div>
 
         {/* FORMULA HIGHLIGHT BOX */}
         <div className="p-4 sm:p-8 rounded-2xl border border-emerald-900/60 bg-emerald-950/20 backdrop-blur-xl flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl min-w-0">
           <div className="space-y-2 text-center md:text-left min-w-0">
             <div className="text-xs font-mono font-bold text-emerald-400 uppercase tracking-widest">
-              Authoritative V2.3.0 Formula
+              Authoritative V2.3.1 Formula
             </div>
             <div className="text-xl sm:text-3xl lg:text-4xl font-mono font-black text-slate-100 tracking-tight break-words">
               RR Difficulty × 10 = <span className="text-amber-400">RR Points</span>
@@ -462,9 +505,9 @@ export default function GuidancePage() {
 
           <div className="grid grid-cols-2 gap-3 w-full md:w-auto shrink-0 font-mono text-xs">
             {[
-              { score: '0.4', points: '4 RR Points' },
-              { score: '2.8', points: '28 RR Points' },
-              { score: '4.7', points: '47 RR Points' },
+              { score: '0.5', points: '5 RR Points' },
+              { score: '1.9', points: '19 RR Points' },
+              { score: '3.5', points: '35 RR Points' },
               { score: '8.6', points: '86 RR Points' },
             ].map((example) => (
               <div key={example.score} className="p-3 rounded-lg border border-slate-800 bg-slate-950/90 text-center">
@@ -485,9 +528,9 @@ export default function GuidancePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 font-mono text-xs">
             {[
               { title: 'Typo / Docs Fix', range: '~0.4 – 0.7', pts: '4–7 RR', desc: 'Fix spelling in intro paragraph or broken link in README.md' },
-              { title: 'Localized Bug Fix', range: '~2.0 – 4.0', pts: '20–40 RR', desc: 'Fix button hover padding or add null check on avatar URI' },
-              { title: 'Multi-File Refactor', range: '~4.0 – 6.0', pts: '40–60 RR', desc: 'Refactor shared telemetry types across workspace packages' },
-              { title: 'Complex Parser / Concurrency', range: '~6.0 – 8.0', pts: '60–80 RR', desc: 'Fix crash in parser on null bytes or worker thread mutex race' },
+              { title: 'Localized Bug Fix', range: '~1.5 – 2.5', pts: '15–25 RR', desc: 'Fix syntax error in print function call or add null check' },
+              { title: 'Moderate Bug / Feature', range: '~3.0 – 4.5', pts: '30–45 RR', desc: 'Validate email format in signup route or update API endpoint' },
+              { title: 'Complex Parser / Security', range: '~5.0 – 8.0', pts: '50–80 RR', desc: 'Fix RLS policy bypass or worker thread mutex race condition' },
               { title: 'Distributed Consensus / MVCC', range: '~8.0 – 10.0', pts: '80–100 RR', desc: 'Raft consensus split-brain recovery or LSM-tree engine redesign' },
             ].map((ex, idx) => (
               <div key={idx} className="p-4 rounded-xl border border-slate-800 bg-slate-950/80 space-y-2 min-w-0">
@@ -546,7 +589,7 @@ export default function GuidancePage() {
           <div className="p-4 sm:p-6 rounded-2xl border border-rose-900/50 bg-rose-950/20 backdrop-blur-md space-y-4 min-w-0">
             <div className="flex items-center gap-2 font-mono font-bold text-sm text-rose-400 uppercase tracking-wider">
               <XCircle className="w-5 h-5 text-rose-400 shrink-0" />
-              <span>Not Directly Rewarded</span>
+              <span>Not Directly Rewarded (0 RR Points)</span>
             </div>
 
             <ul className="space-y-3 font-mono text-xs text-slate-300">
