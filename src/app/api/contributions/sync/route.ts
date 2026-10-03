@@ -70,12 +70,84 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'User not found.' }, { status: 404 });
     }
 
+    let activeSyncPrs: Array<{
+      githubNumber: number;
+      title: string;
+      repositoryFullName: string;
+      status: string;
+      isMerged: boolean;
+      hasLinkedIssue: boolean;
+      isVerified: boolean;
+      rrPoints: number | null;
+      rrDifficulty: number | null;
+      ineligibilityReason: string | null;
+    }> = [];
+
+    if (user.syncStartedAt) {
+      try {
+        const prs = await prisma.pullRequest.findMany({
+          where: {
+            userId: session.user.id,
+            lastSyncedAt: { gte: user.syncStartedAt },
+          },
+          orderBy: { lastSyncedAt: 'desc' },
+          take: 20,
+          select: {
+            githubNumber: true,
+            title: true,
+            status: true,
+            isMerged: true,
+            issueId: true,
+            repository: { select: { fullName: true } },
+            issue: {
+              select: {
+                githubNumber: true,
+                title: true,
+                rrDifficulty: true,
+                contributions: {
+                  where: { userId: session.user.id },
+                  select: { status: true, rrPoints: true }
+                }
+              }
+            }
+          }
+        });
+
+        activeSyncPrs = prs.map((pr) => {
+          const linkedIssue = pr.issue;
+          const contrib = linkedIssue?.contributions[0];
+          const isVerified = contrib?.status === 'MERGED_AND_AUDITED';
+          const hasLinkedIssue = Boolean(pr.issueId || linkedIssue);
+          let ineligibilityReason: string | null = null;
+          if (pr.isMerged && !hasLinkedIssue) {
+            ineligibilityReason = 'Merged — no linked issue';
+          } else if (!pr.isMerged) {
+            ineligibilityReason = pr.status === 'OPEN' ? 'PR is open' : 'PR closed unmerged';
+          }
+
+          return {
+            githubNumber: pr.githubNumber,
+            title: pr.title,
+            repositoryFullName: pr.repository?.fullName || '',
+            status: pr.status,
+            isMerged: pr.isMerged,
+            hasLinkedIssue,
+            isVerified,
+            rrPoints: isVerified ? (contrib?.rrPoints ?? null) : null,
+            rrDifficulty: isVerified ? (linkedIssue?.rrDifficulty ?? null) : null,
+            ineligibilityReason,
+          };
+        });
+      } catch (_) {}
+    }
+
     return NextResponse.json({
       syncStatus: user.contributorSyncStatus,
       lastSyncedAt: user.lastSyncedAt?.toISOString() ?? null,
       syncStartedAt: user.syncStartedAt?.toISOString() ?? null,
       syncCompletedAt: user.syncCompletedAt?.toISOString() ?? null,
       syncError: user.syncError ?? null,
+      activeSyncPrs,
     });
   } catch (err: any) {
     return NextResponse.json({ error: 'Failed retrieving sync status.', details: err.message }, { status: 500 });

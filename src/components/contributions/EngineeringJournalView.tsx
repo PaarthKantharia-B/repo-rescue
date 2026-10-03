@@ -335,25 +335,43 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
   const [filterQuery, setFilterQuery] = useState('');
   const [selectedTechniqueFilter, setSelectedTechniqueFilter] = useState<string | null>(null);
   const [currentSyncStatus, setCurrentSyncStatus] = useState<string>(data.user.contributorSyncStatus || 'IDLE');
+  const [activeSyncPrs, setActiveSyncPrs] = useState<Array<{
+    githubNumber: number;
+    title: string;
+    repositoryFullName: string;
+    status: string;
+    isMerged: boolean;
+    hasLinkedIssue: boolean;
+    isVerified: boolean;
+    rrPoints: number;
+    rrDifficulty: number;
+    ineligibilityReason?: string | null;
+  }>>([]);
 
-  // Automatic Polling when Contributor Sync is RUNNING
+  // Automatic Polling & Fetching when Contributor Sync is RUNNING
   useEffect(() => {
     if (!isOwner || currentSyncStatus !== 'RUNNING') return;
 
-    const interval = setInterval(async () => {
+    const fetchSyncStatus = async () => {
       try {
         const res = await fetch('/api/contributions/sync');
         if (res.ok) {
           const syncData = await res.json();
           if (syncData.syncStatus) {
             setCurrentSyncStatus(syncData.syncStatus);
+            if (syncData.activeSyncPrs) {
+              setActiveSyncPrs(syncData.activeSyncPrs);
+            }
             if (syncData.syncStatus !== 'RUNNING') {
               router.refresh();
             }
           }
         }
       } catch (_) {}
-    }, 3000);
+    };
+
+    fetchSyncStatus();
+    const interval = setInterval(fetchSyncStatus, 3000);
 
     return () => clearInterval(interval);
   }, [isOwner, currentSyncStatus, router]);
@@ -1162,10 +1180,12 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
                 </div>
                 <div>
                   <h2 className="text-xl font-bold text-white tracking-tight font-mono">
-                    Building your Engineering Journal
+                    {localHistory.length === 0 ? 'Building your Engineering Journal' : 'Updating your Engineering Journal'}
                   </h2>
                   <p className="text-xs text-slate-300 font-sans mt-0.5 leading-relaxed">
-                    We&apos;re reviewing your GitHub contribution history and turning verified work into engineering evidence.
+                    {localHistory.length === 0
+                      ? "We're reviewing your GitHub contribution history and turning verified work into engineering evidence."
+                      : "Syncing new GitHub pull requests & auditing verified contributions..."}
                   </p>
                 </div>
               </div>
@@ -1191,12 +1211,63 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
               </div>
             </div>
 
+            {/* Live Real Active PR Processing Feed (Truthful Backend States) */}
+            {activeSyncPrs.length > 0 && (
+              <div className="p-4 rounded-xl border border-slate-800 bg-[#050810] space-y-3 font-mono text-xs">
+                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center justify-between border-b border-slate-800/80 pb-2">
+                  <span>ACTIVELY PROCESSED PULL REQUESTS ({activeSyncPrs.length})</span>
+                  <span className="text-orange-400 font-bold flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse"></span>
+                    Live updates
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {activeSyncPrs.map((pr) => {
+                    const isVerified = pr.status === 'MERGED_AND_AUDITED' || pr.isVerified;
+                    const isIneligible = pr.status === 'AUDITED_INELIGIBLE';
+
+                    return (
+                      <div
+                        key={`${pr.repositoryFullName}#${pr.githubNumber}`}
+                        className="p-3 rounded-lg border border-slate-800/80 bg-[#080c14] flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                      >
+                        <div className="flex items-center gap-2.5 truncate">
+                          <span className="text-orange-400 font-bold text-xs shrink-0">#{pr.githubNumber}</span>
+                          <span className="text-slate-200 text-xs font-sans font-medium truncate">{pr.title}</span>
+                          <span className="text-slate-500 text-[11px] shrink-0">({pr.repositoryFullName})</span>
+                        </div>
+
+                        <div className="shrink-0 flex items-center gap-2">
+                          {isVerified ? (
+                            <span className="px-2.5 py-1 rounded bg-emerald-950/90 border border-emerald-800/80 text-emerald-300 font-bold text-[11px] flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                              <span>Verified · +{pr.rrPoints} RR Points</span>
+                            </span>
+                          ) : isIneligible ? (
+                            <span className="px-2.5 py-1 rounded bg-slate-900 border border-slate-700 text-slate-400 font-semibold text-[11px] flex items-center gap-1">
+                              <Info className="w-3 h-3 text-slate-400" />
+                              <span>Merged — not eligible for RR Points</span>
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 rounded bg-blue-950/90 border border-blue-800/80 text-blue-300 font-semibold text-[11px] flex items-center gap-1">
+                              <Activity className="w-3 h-3 text-blue-400 animate-pulse" />
+                              <span>Syncing / processing...</span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Informational Activities (Productive Wait Labels) */}
             <div className="p-4 rounded-xl border border-slate-800/90 bg-[#050810] space-y-2 text-xs">
               <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
                 ACTIVE BACKGROUND PROCESSING
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-300 font-sans">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[#94a3b8] font-sans">
                 <div className="flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse"></span>
                   <span>Discovering your GitHub contribution history</span>
