@@ -24,7 +24,10 @@ import {
   Brain,
   ArrowLeft,
   ArrowRight,
-  AlertCircle
+  AlertCircle,
+  Circle,
+  RefreshCw,
+  Info
 } from 'lucide-react';
 import { ContributionAnalyticsData, ContributionHistoryItem } from '@/lib/analytics/contribution-analytics-service';
 
@@ -1144,14 +1147,132 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
           </div>
         </div>
 
-        {/* Real-time GitHub Activity Sync Status Banner */}
+        {/* Dedicated Synchronization Experience (RUNNING / Active Sync) */}
         {(currentSyncStatus === 'RUNNING' || user.contributorSyncStatus === 'RUNNING') && (
-          <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-300 text-xs font-mono flex items-center justify-between gap-4 animate-pulse">
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-orange-400 animate-spin" />
-              <span>Syncing GitHub pull requests &amp; auditing verified contributions...</span>
+          <div className="p-6 sm:p-8 rounded-2xl border border-orange-500/30 bg-[#080c14] backdrop-blur-xl shadow-2xl space-y-6 font-mono">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
+              <div className="flex items-center gap-3.5">
+                <div className="relative flex items-center justify-center w-11 h-11 rounded-xl bg-orange-950/60 border border-orange-800/60 text-orange-400 shrink-0">
+                  <GitPullRequest className="w-5 h-5 text-orange-400" />
+                  <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-orange-500"></span>
+                  </span>
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-white tracking-tight font-mono">
+                    Building your Engineering Journal
+                  </h2>
+                  <p className="text-xs text-slate-300 font-sans mt-0.5 leading-relaxed">
+                    We&apos;re reviewing your GitHub contribution history and turning verified work into engineering evidence.
+                  </p>
+                </div>
+              </div>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-950/80 border border-orange-800/60 text-orange-300 text-xs font-bold shrink-0 self-start sm:self-auto shadow-inner">
+                <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse"></span>
+                <span>Sync Active</span>
+              </div>
             </div>
-            <span className="text-[11px] text-orange-400 font-bold">Sync Active</span>
+
+            {/* Stage Progress Checklist (Honest Real Backend States) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+              <div className="p-3.5 rounded-xl border border-emerald-900/50 bg-emerald-950/20 flex items-center gap-3">
+                <CheckCircle2 className="w-4.5 h-4.5 text-emerald-400 shrink-0" />
+                <span className="text-emerald-300 font-semibold">GitHub Account Connected</span>
+              </div>
+              <div className="p-3.5 rounded-xl border border-orange-500/40 bg-orange-950/20 flex items-center gap-3">
+                <Clock className="w-4.5 h-4.5 text-orange-400 animate-spin shrink-0" />
+                <span className="text-orange-200 font-semibold">Syncing GitHub Contribution History</span>
+              </div>
+              <div className="p-3.5 rounded-xl border border-slate-800 bg-slate-900/40 flex items-center gap-3 text-slate-400">
+                <Circle className="w-4.5 h-4.5 shrink-0 text-slate-500" />
+                <span>Journal Updates Automatically</span>
+              </div>
+            </div>
+
+            {/* Informational Activities (Productive Wait Labels) */}
+            <div className="p-4 rounded-xl border border-slate-800/90 bg-[#050810] space-y-2 text-xs">
+              <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                ACTIVE BACKGROUND PROCESSING
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-300 font-sans">
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse"></span>
+                  <span>Discovering your GitHub contribution history</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
+                  <span>Finding pull requests you&apos;ve contributed to</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span>Auditing merged contributions with linked issues</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse"></span>
+                  <span>Building evidence from actual code changes</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Live Real Data Counters (Displayed ONLY if real counts exist) */}
+            {allCount > 0 && (
+              <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/90 grid grid-cols-3 gap-3 font-mono text-xs text-center">
+                <div>
+                  <div className="text-slate-500 text-[10px] font-bold uppercase">DISCOVERED PRs</div>
+                  <div className="text-slate-100 font-bold text-base mt-0.5">{allCount}</div>
+                </div>
+                <div>
+                  <div className="text-slate-500 text-[10px] font-bold uppercase">MERGED PRs</div>
+                  <div className="text-slate-100 font-bold text-base mt-0.5">{mergedCount}</div>
+                </div>
+                <div>
+                  <div className="text-emerald-400 text-[10px] font-bold uppercase">VERIFIED WORK</div>
+                  <div className="text-emerald-400 font-bold text-base mt-0.5">{verifiedContributionsCount}</div>
+                </div>
+              </div>
+            )}
+
+            {/* Trust Signals */}
+            <div className="pt-2 border-t border-slate-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs font-sans text-slate-400">
+              <div className="flex items-center gap-2">
+                <Info className="w-4 h-4 text-blue-400 shrink-0" />
+                <span>Your GitHub data is being processed automatically. You don&apos;t need to do anything.</span>
+              </div>
+              <span className="text-slate-500 text-[11px] font-mono shrink-0">
+                You can leave this page — your journal will update when the sync finishes.
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Failed Sync Banner */}
+        {currentSyncStatus === 'FAILED' && (
+          <div className="p-6 rounded-2xl border border-rose-900/50 bg-rose-950/20 text-rose-200 space-y-4 font-mono text-xs">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
+              <div>
+                <h3 className="font-bold text-sm text-rose-300">We couldn&apos;t finish syncing your GitHub history.</h3>
+                <p className="text-xs font-sans text-slate-400 mt-0.5">
+                  A temporary error occurred while connecting to GitHub. Your journal will retry automatically on your next activity.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={async () => {
+                  setCurrentSyncStatus('RUNNING');
+                  try {
+                    await fetch('/api/contributions/sync', { method: 'POST' });
+                  } catch (_) {}
+                }}
+                className="px-4 py-2 rounded-lg bg-rose-900/80 hover:bg-rose-800 border border-rose-700 text-rose-100 font-bold transition-all text-xs flex items-center gap-2"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Retry Sync</span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -1223,14 +1344,16 @@ export const EngineeringJournalView: React.FC<Props> = ({ data, isOwner = false 
         {/* SECTION 6: PR CARDS LIST */}
         {displayHistory.length === 0 ? (
           <div className="p-12 rounded-2xl border border-slate-800 bg-[#080c14] text-center font-mono space-y-4">
-            <div className="w-14 h-14 mx-auto rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500">
-              <BookOpen className="w-7 h-7" />
+            <div className="w-14 h-14 mx-auto rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400">
+              {allCount === 0 ? <CheckCircle2 className="w-7 h-7 text-emerald-400" /> : <BookOpen className="w-7 h-7" />}
             </div>
-            <h3 className="text-base font-bold text-slate-200">
-              No pull request activity matching your filter ({statusFilter}).
+            <h3 className="text-base font-bold text-slate-100">
+              {allCount === 0 ? 'Your GitHub history is synced.' : `No pull request activity matching your filter (${statusFilter}).`}
             </h3>
             <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed font-sans">
-              Repo Rescue automatically discovers all pull requests from your GitHub account and audits merged work with linked issues.
+              {allCount === 0
+                ? "We didn't find any verified contributions yet. When you merge your first qualifying contribution, it will appear here automatically."
+                : 'Repo Rescue automatically discovers all pull requests from your GitHub account and audits merged work with linked issues.'}
             </p>
             <div className="pt-2">
               <Link
